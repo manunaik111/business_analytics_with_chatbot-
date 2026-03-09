@@ -1,11 +1,3 @@
-# from intent_classifier import predict_intent
-
-# query = input("Enter your question: ")
-
-# intent = predict_intent(query)
-
-# print("Predicted Intent:", intent)
-
 from intent_classifier import predict_intent
 
 tests = [
