@@ -51,9 +51,7 @@ if 'api_error' not in st.session_state:
 # ── Global CSS ────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-
+#
 
 /* Background */
 .stApp {
@@ -611,7 +609,7 @@ with button_container:
     if st.button(btn_label, key="float_toggle", type="primary"):
         st.session_state.chat_open = not st.session_state.chat_open
         st.rerun()
-button_container.float("bottom: 24px; right: 24px; width: auto;")
+button_container.float("bottom: 60px; right: 24px; width: auto;")
 
 # ── Floating Chat Panel ───────────────────────────────────────────────
 if st.session_state.chat_open:
@@ -663,9 +661,9 @@ if st.session_state.chat_open:
             st.rerun()
 
     chat_container.float(
-        "bottom: 84px; right: 24px; width: 360px; "
+        "bottom: 120px; right: 24px; width: 360px; "
         "background-color: #F8F5FF; border-radius: 18px; "
         "box-shadow: 0 8px 32px rgba(109,40,217,0.18); "
         "border: 1px solid #DDD6FE; padding: 0 14px 14px 14px; "
-        "max-height: 560px; overflow-y: auto; z-index: 999;"
+        "max-height: 520px; overflow-y: auto; z-index: 999;"
     )
