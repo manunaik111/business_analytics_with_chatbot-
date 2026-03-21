@@ -1,12 +1,13 @@
 # chatbot_engine.py
 # Team 5 — Integration & Interface
-# Fixed: all intents mapped, strict off-topic redirect, proper memory clear
+# AI Sales Chatbot using Groq API with Memory System
 
 import sys
 import os
 import streamlit as st
 from groq import Groq
 
+# ── Fix import paths ──────────────────────────────────────────────────
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from nlp.preprocessing import preprocess
@@ -48,8 +49,8 @@ def build_system_prompt():
 
     # Monthly trend
     if 'Order Date' in df.columns:
-        df['Month'] = df['Order Date'].dt.to_period('M')
-        monthly     = df.groupby('Month')['Sales'].sum().tail(12).to_dict()
+        df['Month']  = df['Order Date'].dt.to_period('M')
+        monthly      = df.groupby('Month')['Sales'].sum().tail(12).to_dict()
         monthly_text = "\n".join([f"  - {str(m)}: ${s:,.0f}" for m, s in monthly.items()])
     else:
         monthly_text = "  - Monthly data not available"
@@ -59,7 +60,10 @@ def build_system_prompt():
     product_text  = "\n".join([f"  - {p}: ${s:,.0f}" for p, s in top_products.items()])
     segment_text  = "\n".join([f"  - {s}: ${v:,.0f}" for s, v in seg_sales.items()])
 
-    return f"""You are an AI Sales Assistant for a company. You ONLY answer questions about the company sales data below. You MUST refuse any question not related to this sales data — including weather, general knowledge, coding, or any other topic. For off-topic questions respond with exactly: "I can only help with questions about the company sales data. Please ask me about sales, profits, regions, products, or trends."
+    return f"""You are a professional AI Sales Assistant for a company.
+You have complete and accurate knowledge of the company sales dataset provided below.
+Always answer confidently and directly using the data provided.
+Never say you cannot find data or that data is not available — all the data is present below.
 
 DATASET FACTS:
 - Total Sales:  ${total_sales:,.0f}
@@ -81,12 +85,17 @@ SALES BY CUSTOMER SEGMENT:
 MONTHLY SALES TREND (Last 12 Months):
 {monthly_text}
 
-RULES:
-- Only answer questions about the sales data above
-- Use conversation history for follow-up questions
-- Always include specific numbers
+STRICT RULES:
+- Answer every sales question directly and confidently using the numbers above
+- Never say you cannot see data or that data is not available
+- Never say I don't see relevant data — the data is always present above
+- Always start your answer with the direct answer, not a disclaimer or preamble
+- Use the full conversation history to answer follow-up questions correctly
+- If someone says 'that region', 'it', or 'there' refer back to prior context
+- Always include specific numbers in your answers
 - Keep answers concise and professional
-- For off-topic questions use the exact refusal message above"""
+- Format numbers with commas and dollar signs
+- If asked something outside sales data respond with exactly: I can only assist with questions about the company sales data."""
 
 # ── Initialize memory ─────────────────────────────────────────────────
 def initialize_memory():
@@ -101,27 +110,22 @@ def initialize_memory():
 def get_analytics_for_intent(intent, analyzer):
     try:
         if intent == "Ranking Query":
-            result = analyzer.product_analysis()
-            return str(result)
+            return str(analyzer.product_analysis())
         elif intent in ("Sales Query", "Profit Query"):
-            result = analyzer.calculate_kpis()
-            return str(result)
+            return str(analyzer.calculate_kpis())
         elif intent in ("Comparison Query", "Regional Query"):
-            result = analyzer.regional_analysis()
-            return str(result)
+            return str(analyzer.regional_analysis())
         elif intent == "Category Query":
-            result = analyzer.category_analysis()
-            return str(result)
+            return str(analyzer.category_analysis())
         elif intent == "Trend Query":
             df = analyzer.df
             if 'Order Date' in df.columns:
                 df['Month'] = df['Order Date'].dt.to_period('M')
-                monthly = df.groupby('Month')['Sales'].sum().tail(12)
+                monthly     = df.groupby('Month')['Sales'].sum().tail(12)
                 return f"Monthly sales trend:\n{monthly.to_string()}"
             return None
         elif intent == "Segment Query":
-            result = analyzer.customer_analysis()
-            return str(result)
+            return str(analyzer.customer_analysis())
         else:
             return None
     except Exception:
@@ -143,7 +147,7 @@ def chat(user_message):
         except Exception:
             clean_text = user_message
 
-        # Step 2 — NLP
+        # Step 2 — NLP intent and entities
         try:
             intent   = predict_intent(clean_text)
             analyzer = get_analyzer()
@@ -155,22 +159,22 @@ def chat(user_message):
             intent   = None
             analyzer = get_analyzer()
 
-        # Step 3 — Analytics
+        # Step 3 — Analytics data
         try:
             analytics_data = get_analytics_for_intent(intent, analyzer)
         except Exception:
             analytics_data = None
 
-        # Step 4 — Build message
+        # Step 4 — Build full message
         if analytics_data:
             full_message = (
                 f"{user_message}\n\n"
-                f"[Relevant Data]: {str(analytics_data)[:800]}"
+                f"[Relevant Data from Dataset]: {str(analytics_data)[:800]}"
             )
         else:
             full_message = user_message
 
-        # Step 5 — Build messages list for Groq
+        # Step 5 — Build Groq messages list
         messages = [
             {"role": "system", "content": build_system_prompt()}
         ]
@@ -184,12 +188,12 @@ def chat(user_message):
             "content": full_message
         })
 
-        # Step 6 — Call Groq
+        # Step 6 — Call Groq API
         response = client.chat.completions.create(
             model=AI_MODEL,
             messages=messages,
             max_tokens=1024,
-            temperature=0.7
+            temperature=0.3
         )
         ai_reply = response.choices[0].message.content
 
@@ -209,7 +213,7 @@ def chat(user_message):
     finally:
         st.session_state.is_processing = False
 
-# ── Clear memory completely ───────────────────────────────────────────
+# ── Clear memory ──────────────────────────────────────────────────────
 def clear_memory():
     st.session_state.conversation_history = []
     st.session_state.chat_messages        = []
