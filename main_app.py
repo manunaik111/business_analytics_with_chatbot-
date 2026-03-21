@@ -25,14 +25,14 @@ from dashboard.dashboard import (
 
 # ── Page Configuration ────────────────────────────────────────────────
 st.set_page_config(
-    page_title="AI Sales Analytics | Team 5",
-    page_icon="🔮",
+    page_title="AI Sales Analytics Dashboard",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
         'Get Help': None,
         'Report a bug': None,
-        'About': "AI Sales Analytics Dashboard — Built by Team 5"
+        'About': "AI Sales Analytics Dashboard"
     }
 )
 
@@ -285,7 +285,7 @@ if not st.session_state.app_loaded:
         <div style="display:flex;flex-direction:column;align-items:center;
                     justify-content:center;padding:100px 20px;text-align:center;">
             <div style="font-size:32px;font-weight:800;color:#2D1B69;margin-bottom:8px;">
-                🔮 AI Sales Analytics
+                AI Sales Analytics Dashboard
             </div>
             <div style="font-size:16px;color:#7C3AED;margin-bottom:32px;">
                 Preparing your dashboard...
@@ -371,7 +371,7 @@ def apply_filters(df, category, region, profit_status, year):
 
 # ── Sidebar Filters ───────────────────────────────────────────────────
 st.sidebar.markdown(
-    "<h2 style='text-align:center;color:#2D1B69;'>🔮 Dashboard Filters</h2>",
+    "<h2 style='text-align:center;color:#2D1B69;'>Dashboard Filters</h2>",
     unsafe_allow_html=True
 )
 st.sidebar.markdown(
@@ -405,19 +405,19 @@ else:
     filtered_df = pd.DataFrame()
 
 st.sidebar.divider()
-st.sidebar.caption("AI Sales Analytics Dashboard   |   Team 5")
+st.sidebar.caption("Sales Analytics Dashboard   |   Data Analysis Project")
 
 # ── Dashboard Header ──────────────────────────────────────────────────
 col_title, col_badge = st.columns([4, 1])
 with col_title:
-    st.title("🔮 AI Sales Analytics Dashboard")
+    st.title("Sales Analytics Dashboard")
 with col_badge:
     st.markdown("""
     <div style="text-align:right;padding-top:18px;">
         <span style="background:linear-gradient(135deg,#7C3AED,#6D28D9);
                      color:white;padding:6px 14px;border-radius:20px;
                      font-size:12px;font-weight:600;">
-            ✨ Team 5 Build
+            AI Powered
         </span>
     </div>
     """, unsafe_allow_html=True)
@@ -450,14 +450,14 @@ if dataset_loaded and not filtered_df.empty:
         avg_shipping = 0.0
 
     metrics = [
-        ("💰 TOTAL SALES",    f"${total_sales:,.0f}"),
-        ("🛒 AVG ORDER",      f"${avg_order:,.2f}"),
-        ("📈 TOTAL PROFIT",   f"${total_profit:,.0f}"),
-        ("🎯 PROFIT MARGIN",  f"{profit_margin:.1f}%"),
-        ("📊 PROFIT RATIO",   f"{profit_ratio:.3f}"),
-        ("🏷️ AVG DISCOUNT",  f"{avg_discount:.1f}%"),
-        ("🚚 AVG SHIPPING",   f"{avg_shipping:.1f} days"),
-        ("🧾 TOTAL RECORDS",  f"{total_records:,}"),
+        ("TOTAL SALES",    f"${total_sales:,.0f}"),
+        ("AVG ORDER",      f"${avg_order:,.2f}"),
+        ("TOTAL PROFIT",   f"${total_profit:,.0f}"),
+        ("PROFIT MARGIN",  f"{profit_margin:.1f}%"),
+        ("PROFIT RATIO",   f"{profit_ratio:.3f}"),
+        ("AVG DISCOUNT",   f"{avg_discount:.1f}%"),
+        ("AVG SHIPPING",   f"{avg_shipping:.1f} days"),
+        ("TOTAL RECORDS",  f"{total_records:,}"),
     ]
 
     cols = st.columns(8)
@@ -530,9 +530,9 @@ if dataset_loaded and not filtered_df.empty:
             loss_orders   = len(filtered_df[filtered_df["Profit"] < 0])
             loss_pct      = (loss_orders / total_records * 100) if total_records > 0 else 0
 
-            sentence = (f"🚨 Priority: Reduce losses ({loss_pct:.1f}%) in {best_category}!"
+            sentence = (f"Priority: Reduce losses ({loss_pct:.1f}%) in {best_category}."
                         if loss_pct > 20
-                        else f"🌟 Excellent: {best_region} is leading in profitability!")
+                        else f"Excellent: {best_region} is leading in profitability.")
 
             st.markdown(f"""
             <div style="background:#FFFFFF;border:1px solid #DDD6FE;
@@ -540,21 +540,21 @@ if dataset_loaded and not filtered_df.empty:
                         padding:20px;border-radius:14px;
                         display:flex;flex-direction:column;gap:10px;">
                 <h3 style="color:#2D1B69;text-align:center;
-                           margin:0;font-size:16px;">📊 Key Insights</h3>
+                           margin:0;font-size:16px;">Key Insights</h3>
                 <div style="color:#6B7280;font-size:13px;">
-                    🏆 <b>Best Category:</b>
+                    <b>Best Category:</b>
                     <span style="color:#2D1B69;float:right;">{best_category}</span>
                 </div>
                 <div style="color:#6B7280;font-size:13px;">
-                    🌍 <b>Best Region:</b>
+                    <b>Best Region:</b>
                     <span style="color:#2D1B69;float:right;">{best_region}</span>
                 </div>
                 <div style="color:#6B7280;font-size:13px;">
-                    📅 <b>Peak Month:</b>
+                    <b>Peak Month:</b>
                     <span style="color:#2D1B69;float:right;">{peak_month}</span>
                 </div>
                 <div style="color:#6B7280;font-size:13px;">
-                    📉 <b>Loss Percentage:</b>
+                    <b>Loss Percentage:</b>
                     <span style="color:#2D1B69;float:right;">{loss_pct:.1f}%</span>
                 </div>
                 <div style="color:#7C3AED;font-size:12px;font-style:italic;
@@ -573,7 +573,7 @@ elif dataset_loaded and filtered_df.empty:
 st.markdown("---")
 
 # ── Report Downloads ──────────────────────────────────────────────────
-st.markdown('<span class="section-title">📥 Download Reports</span>',
+st.markdown('<span class="section-title">Download Reports</span>',
             unsafe_allow_html=True)
 try:
     dl1, dl2, dl3 = st.columns([1, 1, 2])
@@ -581,7 +581,7 @@ try:
         try:
             excel_data = generate_excel_report(analyzer)
             st.download_button(
-                label="📊 Download Excel",
+                label="Download Excel Report",
                 data=excel_data,
                 file_name="sales_report.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -592,7 +592,7 @@ try:
         try:
             pdf_data = generate_pdf_report(analyzer)
             st.download_button(
-                label="📄 Download PDF",
+                label="Download PDF Report",
                 data=pdf_data,
                 file_name="sales_report.pdf",
                 mime="application/pdf"
@@ -607,7 +607,7 @@ st.markdown("---")
 # ── Floating Toggle Button ────────────────────────────────────────────
 button_container = st.container()
 with button_container:
-    btn_label = "✕ Close" if st.session_state.chat_open else "💬 AI Assistant"
+    btn_label = "Close Assistant" if st.session_state.chat_open else "AI Assistant"
     if st.button(btn_label, key="float_toggle", type="primary"):
         st.session_state.chat_open = not st.session_state.chat_open
         st.rerun()
@@ -618,14 +618,14 @@ if st.session_state.chat_open:
     chat_container = st.container()
     with chat_container:
         st.markdown("""
-        <div class="chat-header">🤖 AI Sales Assistant</div>
+        <div class="chat-header">AI Sales Assistant</div>
         """, unsafe_allow_html=True)
 
         if not st.session_state.chat_messages:
             st.markdown("""
             <div class="msg-bot">
-                👋 Hello! I am your AI Sales Assistant.<br>
-                Ask me anything about the sales data!
+                Hello. I am your AI Sales Assistant.<br>
+                Ask me anything about the sales data.
             </div>
             """, unsafe_allow_html=True)
         else:
@@ -639,17 +639,17 @@ if st.session_state.chat_open:
         st.markdown("**Quick Questions:**")
         q1, q2 = st.columns(2)
         with q1:
-            if st.button("🏆 Top Region", key="qq1"):
+            if st.button("Top Region", key="qq1"):
                 st.session_state.pending_q = "Which region has the highest sales?"
                 st.rerun()
-            if st.button("📦 Category", key="qq2"):
+            if st.button("Category", key="qq2"):
                 st.session_state.pending_q = "Which category has highest profit?"
                 st.rerun()
         with q2:
-            if st.button("🥇 Products", key="qq3"):
+            if st.button("Top Products", key="qq3"):
                 st.session_state.pending_q = "What are the top 5 products?"
                 st.rerun()
-            if st.button("📈 Trend", key="qq4"):
+            if st.button("Monthly Trend", key="qq4"):
                 st.session_state.pending_q = "Show me the monthly sales trend"
                 st.rerun()
 
@@ -658,7 +658,7 @@ if st.session_state.chat_open:
             st.session_state.pending_q = user_input
             st.rerun()
 
-        if st.button("🗑️ Clear Chat", key="clear_btn", type="secondary"):
+        if st.button("Clear Conversation", key="clear_btn", type="secondary"):
             clear_memory()
             st.rerun()
 
