@@ -51,7 +51,9 @@ if 'api_error' not in st.session_state:
 # ── Global CSS ────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-#
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
 
 /* Background */
 .stApp {
@@ -430,10 +432,10 @@ if dataset_loaded and not filtered_df.empty:
     total_sales    = filtered_df['Sales'].sum()
     avg_order      = filtered_df['Sales'].mean()
     total_profit   = filtered_df['Profit'].sum()
-    profit_margin  = (12.1 if len(filtered_df) > 9000
-                      else (filtered_df['Profit'] / filtered_df['Sales']).mean() * 100)
-    avg_discount   = (15.6 if len(filtered_df) > 9000
-                      else filtered_df['Discount'].mean() * 100)
+    profit_margin  = ((filtered_df['Profit'] / filtered_df['Sales']).mean() * 100
+                      if not filtered_df.empty else 0)
+    avg_discount   = (filtered_df['Discount'].mean() * 100
+                      if not filtered_df.empty else 0)
     profit_ratio   = (total_profit / total_sales) if total_sales != 0 else 0
     total_records  = len(filtered_df)
 
