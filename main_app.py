@@ -1,6 +1,6 @@
 # main_app.py
 # Team 5 — Integration & Interface
-# Full Integration: 8 KPIs + 4 Filters + 6 Charts + Insights + Floating Chatbot
+# Midnight Aurora Theme + View Detailed Data
 
 import streamlit as st
 from streamlit_float import *
@@ -48,44 +48,56 @@ if 'app_loaded' not in st.session_state:
 if 'api_error' not in st.session_state:
     st.session_state.api_error = None
 
-# ── Global CSS ────────────────────────────────────────────────────────
+# ── Midnight Aurora CSS ───────────────────────────────────────────────
 st.markdown("""
 <style>
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
-header {visibility: hidden;}
 
-/* Background */
+/* Dark background */
 .stApp {
-    background-color: #F3F0FA !important;
+    background-color: #0E1117 !important;
 }
 .block-container {
     padding-top: 1.5rem !important;
     padding-bottom: 3rem !important;
     max-width: 100% !important;
+    background-color: #0E1117 !important;
+}
+
+/* All text white on dark */
+h1, h2, h3, p, span, div, label {
+    color: #E0E0E0 !important;
+}
+
+/* Page title gradient */
+.main-title {
+    background: linear-gradient(90deg, #00D4FF, #C084FC);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
 }
 
 /* Sidebar */
 [data-testid="stSidebar"] {
-    background-color: #EDE9FE !important;
-    border-right: 1px solid #C4B5FD !important;
+    background-color: #161625 !important;
+    border-right: 1px solid #2D2D4E !important;
 }
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h4,
-[data-testid="stSidebar"] p,
-[data-testid="stSidebar"] span {
-    color: #2D1B69 !important;
+[data-testid="stSidebar"] * {
+    color: #E0E0E0 !important;
 }
 div[data-baseweb="select"] > div {
-    background-color: #FFFFFF !important;
-    color: #2D1B69 !important;
-    border: 1px solid #C4B5FD !important;
+    background-color: #1E1E2E !important;
+    color: #E0E0E0 !important;
+    border: 1px solid #3D3D6E !important;
     border-radius: 8px !important;
 }
 
-/* Sidebar buttons */
+/* Sidebar button */
 [data-testid="stSidebar"] .stButton > button {
-    background: linear-gradient(135deg, #7C3AED, #6D28D9) !important;
+    background: linear-gradient(135deg, #7B2FBE, #5B21B6) !important;
     color: white !important;
     border-radius: 10px !important;
     border: none !important;
@@ -93,141 +105,152 @@ div[data-baseweb="select"] > div {
     font-weight: 600 !important;
 }
 [data-testid="stSidebar"] .stButton > button:hover {
-    background: linear-gradient(135deg, #6D28D9, #5B21B6) !important;
+    background: linear-gradient(135deg, #9B4FDE, #7B2FBE) !important;
 }
 
-/* Page title */
-h1 {
-    color: #2D1B69 !important;
-    font-weight: 800 !important;
-    font-size: 2rem !important;
-    letter-spacing: -0.5px !important;
-}
-h2, h3 {
-    color: #4C1D95 !important;
-    font-weight: 600 !important;
-}
-
-/* KPI Cards */
+/* KPI Cards — Dark with purple glow border */
 .kpi-card {
-    background-color: #FFFFFF;
-    padding: 12px 6px;
-    border-radius: 12px;
-    border: 1px solid rgba(167, 139, 250, 0.3);
-    box-shadow: 0 4px 16px rgba(109, 40, 217, 0.1);
+    background-color: #1E1E2E;
+    padding: 14px 8px;
+    border-radius: 14px;
+    border-left: 3px solid #7B2FBE;
+    box-shadow: 0 0 15px rgba(123, 47, 190, 0.3);
     text-align: center;
-    min-height: 80px;
+    min-height: 85px;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    position: relative;
-    overflow: hidden;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.kpi-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #7C3AED, #A78BFA);
-}
 .kpi-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(109, 40, 217, 0.18);
+    transform: translateY(-3px);
+    box-shadow: 0 0 25px rgba(123, 47, 190, 0.5);
 }
 .kpi-label {
     font-size: 9px;
-    color: #7C3AED;
+    color: #A0A0C0 !important;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: 1px;
     font-weight: 700;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     white-space: nowrap;
 }
 .kpi-value {
-    font-size: 15px;
-    font-weight: 700;
-    color: #2D1B69;
+    font-size: 16px;
+    font-weight: 800;
+    color: #C084FC !important;
     line-height: 1.2;
+}
+
+/* Section titles */
+.section-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #00D4FF !important;
+    margin: 24px 0 12px 0;
+    padding-left: 10px;
+    border-left: 3px solid #C084FC;
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 /* Chart cards */
 .chart-card {
-    background: #FFFFFF;
+    background: #1E1E2E;
     border-radius: 14px;
     padding: 12px;
-    box-shadow: 0 4px 16px rgba(109, 40, 217, 0.08);
-    border: 1px solid rgba(167, 139, 250, 0.2);
+    box-shadow: 0 0 15px rgba(123, 47, 190, 0.2);
+    border: 1px solid #2D2D4E;
     margin-bottom: 12px;
-}
-
-/* Section title */
-.section-title {
-    font-size: 16px;
-    font-weight: 700;
-    color: #2D1B69;
-    margin: 20px 0 10px 0;
-    padding-left: 10px;
-    border-left: 4px solid #7C3AED;
-    display: block;
 }
 
 /* Download buttons */
 .stDownloadButton > button {
-    border-radius: 12px !important;
+    border-radius: 10px !important;
     font-weight: 600 !important;
     font-size: 13px !important;
     padding: 8px 18px !important;
     border: none !important;
-    background: linear-gradient(135deg, #7C3AED, #6D28D9) !important;
+    background: linear-gradient(135deg, #7B2FBE, #5B21B6) !important;
     color: white !important;
-    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3) !important;
+    box-shadow: 0 0 12px rgba(123, 47, 190, 0.4) !important;
     transition: all 0.2s ease !important;
 }
 .stDownloadButton > button:hover {
-    background: linear-gradient(135deg, #6D28D9, #5B21B6) !important;
+    background: linear-gradient(135deg, #9B4FDE, #7B2FBE) !important;
     transform: translateY(-1px) !important;
 }
 
 /* Primary buttons */
 .stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #7C3AED, #6D28D9) !important;
+    background: linear-gradient(135deg, #7B2FBE, #5B21B6) !important;
     color: white !important;
     border: none !important;
-    border-radius: 12px !important;
+    border-radius: 10px !important;
     font-weight: 600 !important;
-    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3) !important;
+    box-shadow: 0 0 12px rgba(123, 47, 190, 0.4) !important;
     transition: all 0.2s ease !important;
 }
 .stButton > button[kind="secondary"] {
-    background: white !important;
-    color: #7C3AED !important;
-    border: 1.5px solid #A78BFA !important;
-    border-radius: 12px !important;
+    background: #1E1E2E !important;
+    color: #C084FC !important;
+    border: 1px solid #7B2FBE !important;
+    border-radius: 10px !important;
     font-weight: 500 !important;
 }
 .stButton > button[kind="secondary"]:hover {
-    background: #EDE9FE !important;
+    background: #2D2D4E !important;
 }
 
 /* Divider */
 hr {
     border: none !important;
-    border-top: 1px solid rgba(167, 139, 250, 0.3) !important;
+    border-top: 1px solid #2D2D4E !important;
     margin: 1.2rem 0 !important;
 }
 
 /* Alert */
 div[data-testid="stAlert"] {
-    background: linear-gradient(135deg, #EDE9FE, #F5F3FF) !important;
-    border: 1px solid #C4B5FD !important;
+    background: #1E1E2E !important;
+    border: 1px solid #3D3D6E !important;
     border-radius: 12px !important;
-    color: #4C1D95 !important;
+    color: #C084FC !important;
+}
+
+/* Expander — View Detailed Data */
+details {
+    background: #1E1E2E !important;
+    border: 1px solid #3D3D6E !important;
+    border-radius: 12px !important;
+}
+details summary {
+    color: #00D4FF !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    padding: 12px 16px !important;
+}
+[data-testid="stExpander"] {
+    background: #1E1E2E !important;
+    border: 1px solid #3D3D6E !important;
+    border-radius: 12px !important;
+}
+
+/* Dataframe table */
+[data-testid="stDataFrame"] {
+    background: #1E1E2E !important;
+}
+.stDataFrame th {
+    background: #2D2D4E !important;
+    color: #C084FC !important;
+}
+.stDataFrame td {
+    color: #E0E0E0 !important;
 }
 
 /* Chat messages */
 .msg-user {
-    background: linear-gradient(135deg, #7C3AED, #6D28D9);
+    background: linear-gradient(135deg, #7B2FBE, #5B21B6);
     color: white;
     padding: 10px 15px;
     border-radius: 16px 16px 3px 16px;
@@ -238,19 +261,19 @@ div[data-testid="stAlert"] {
     line-height: 1.5;
 }
 .msg-bot {
-    background: #FFFFFF;
-    color: #2D1B69;
+    background: #1E1E2E;
+    color: #E0E0E0;
     padding: 10px 15px;
     border-radius: 16px 16px 16px 3px;
     margin: 6px 0;
     font-size: 13px;
     word-wrap: break-word;
     text-align: left;
-    border: 1px solid #DDD6FE;
+    border: 1px solid #3D3D6E;
     line-height: 1.5;
 }
 .chat-header {
-    background: linear-gradient(135deg, #7C3AED, #6D28D9);
+    background: linear-gradient(135deg, #7B2FBE, #5B21B6);
     color: white;
     padding: 14px 18px;
     border-radius: 14px 14px 0 0;
@@ -258,23 +281,31 @@ div[data-testid="stAlert"] {
     font-size: 15px;
     margin-bottom: 10px;
 }
+
+/* Chat input */
 div[data-testid="stChatInput"] > div {
     border-radius: 12px !important;
-    border: 1.5px solid #C4B5FD !important;
-    background: white !important;
+    border: 1px solid #3D3D6E !important;
+    background: #1E1E2E !important;
 }
 div[data-testid="stChatInput"] > div:focus-within {
-    border-color: #7C3AED !important;
-    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15) !important;
+    border-color: #7B2FBE !important;
+    box-shadow: 0 0 0 3px rgba(123, 47, 190, 0.2) !important;
 }
 
-/* Force 8 KPI columns inline */
+/* KPI columns */
 [data-testid="stHorizontalBlock"] {
     gap: 6px !important;
 }
 [data-testid="column"] {
     min-width: 80px !important;
 }
+
+/* Insights panel cards */
+.insight-card-green  { background: #1a3a2a; border-left: 3px solid #22c55e; border-radius: 10px; padding: 14px 16px; }
+.insight-card-blue   { background: #1a2a3a; border-left: 3px solid #3b82f6; border-radius: 10px; padding: 14px 16px; }
+.insight-card-olive  { background: #2a2a1a; border-left: 3px solid #84cc16; border-radius: 10px; padding: 14px 16px; }
+.insight-card-red    { background: #3a1a1a; border-left: 3px solid #ef4444; border-radius: 10px; padding: 14px 16px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -283,22 +314,19 @@ if not st.session_state.app_loaded:
     with st.spinner(""):
         st.markdown("""
         <div style="display:flex;flex-direction:column;align-items:center;
-                    justify-content:center;padding:100px 20px;text-align:center;">
-            <div style="font-size:32px;font-weight:800;color:#2D1B69;margin-bottom:8px;">
+                    justify-content:center;padding:100px 20px;text-align:center;
+                    background:#0E1117;">
+            <div style="font-size:32px;font-weight:800;margin-bottom:8px;
+                        background:linear-gradient(90deg,#00D4FF,#C084FC);
+                        -webkit-background-clip:text;-webkit-text-fill-color:transparent;">
                 AI Sales Analytics Dashboard
             </div>
-            <div style="font-size:16px;color:#7C3AED;margin-bottom:32px;">
+            <div style="font-size:16px;color:#A0A0C0;margin-bottom:32px;">
                 Preparing your dashboard...
             </div>
-            <div style="font-size:14px;color:#6D28D9;margin:4px 0;">
-                📂 Loading sales dataset...
-            </div>
-            <div style="font-size:14px;color:#6D28D9;margin:4px 0;">
-                🧠 Initialising AI assistant...
-            </div>
-            <div style="font-size:14px;color:#6D28D9;margin:4px 0;">
-                📊 Building analytics engine...
-            </div>
+            <div style="font-size:14px;color:#7B2FBE;margin:4px 0;">Loading sales dataset...</div>
+            <div style="font-size:14px;color:#7B2FBE;margin:4px 0;">Initialising AI assistant...</div>
+            <div style="font-size:14px;color:#7B2FBE;margin:4px 0;">Building analytics engine...</div>
         </div>
         """, unsafe_allow_html=True)
         try:
@@ -335,20 +363,14 @@ if st.session_state.pending_q:
 
 # ── Load Dataset ──────────────────────────────────────────────────────
 try:
-    analyzer = get_analyzer()
-    df_raw   = analyzer.df.copy()
-
-    # Fix column name for shipping delay
+    analyzer    = get_analyzer()
+    df_raw      = analyzer.df.copy()
     if 'shipping_delay_days' in df_raw.columns and 'Shipping Delay' not in df_raw.columns:
         df_raw['Shipping Delay'] = df_raw['shipping_delay_days']
-
-    # Ensure Order Date and Ship Date are datetime
     for col in ['Order Date', 'Ship Date']:
         if col in df_raw.columns:
             df_raw[col] = pd.to_datetime(df_raw[col], dayfirst=True, errors='coerce')
-
     dataset_loaded = True
-
 except Exception as e:
     dataset_loaded = False
     df_raw         = pd.DataFrame()
@@ -371,18 +393,17 @@ def apply_filters(df, category, region, profit_status, year):
 
 # ── Sidebar Filters ───────────────────────────────────────────────────
 st.sidebar.markdown(
-    "<h2 style='text-align:center;color:#2D1B69;'>Dashboard Filters</h2>",
+    "<h2 style='text-align:center;color:#C084FC !important;'>Dashboard Filters</h2>",
     unsafe_allow_html=True
 )
 st.sidebar.markdown(
-    "<h4 style='text-align:center;color:#7C3AED;font-weight:400;'>Use filters to explore the dataset.</h4>",
+    "<p style='text-align:center;color:#A0A0C0 !important;font-size:13px;'>Use filters to explore the dataset.</p>",
     unsafe_allow_html=True
 )
 st.sidebar.divider()
 
 if dataset_loaded:
     years = sorted(df_raw["Order Date"].dt.year.dropna().unique().astype(int).tolist())
-
     for key, default in [("year","All"),("category","All"),("region","All"),("profit_status","All")]:
         if key not in st.session_state:
             st.session_state[key] = default
@@ -393,7 +414,6 @@ if dataset_loaded:
     year          = st.sidebar.selectbox("Year",          ["All"] + [str(y) for y in years],              key="year")
 
     st.sidebar.markdown("<br>", unsafe_allow_html=True)
-
     if st.sidebar.button("Reset All Filters", type="primary"):
         for key in ["category","region","profit_status","year"]:
             if key in st.session_state:
@@ -408,19 +428,14 @@ st.sidebar.divider()
 st.sidebar.caption("Sales Analytics Dashboard   |   Data Analysis Project")
 
 # ── Dashboard Header ──────────────────────────────────────────────────
-col_title, col_badge = st.columns([4, 1])
-with col_title:
-    st.title("Sales Analytics Dashboard")
-with col_badge:
-    st.markdown("""
-    <div style="text-align:right;padding-top:18px;">
-        <span style="background:linear-gradient(135deg,#7C3AED,#6D28D9);
-                     color:white;padding:6px 14px;border-radius:20px;
-                     font-size:12px;font-weight:600;">
-            AI Powered
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
+st.markdown("""
+<div style="text-align:center;padding:20px 0 10px 0;">
+    <div class="main-title">Sales Analytics Dashboard</div>
+    <p style="color:#A0A0C0 !important;font-size:14px;margin-top:4px;">
+        Real-time Analytics &nbsp;•&nbsp; AI Assistant &nbsp;•&nbsp; Performance Metrics
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 st.markdown("---")
 
@@ -429,17 +444,16 @@ if dataset_loaded and not filtered_df.empty:
     st.markdown('<span class="section-title">Key Performance Indicators</span>',
                 unsafe_allow_html=True)
 
-    total_sales    = filtered_df['Sales'].sum()
-    avg_order      = filtered_df['Sales'].mean()
-    total_profit   = filtered_df['Profit'].sum()
-    profit_margin  = ((filtered_df['Profit'] / filtered_df['Sales']).mean() * 100
-                      if not filtered_df.empty else 0)
-    avg_discount   = (filtered_df['Discount'].mean() * 100
-                      if not filtered_df.empty else 0)
-    profit_ratio   = (total_profit / total_sales) if total_sales != 0 else 0
-    total_records  = len(filtered_df)
+    total_sales   = filtered_df['Sales'].sum()
+    avg_order     = filtered_df['Sales'].mean()
+    total_profit  = filtered_df['Profit'].sum()
+    profit_margin = ((filtered_df['Profit'] / filtered_df['Sales']).mean() * 100
+                     if not filtered_df.empty else 0)
+    avg_discount  = (filtered_df['Discount'].mean() * 100
+                     if not filtered_df.empty else 0)
+    profit_ratio  = (total_profit / total_sales) if total_sales != 0 else 0
+    total_records = len(filtered_df)
 
-    # Avg shipping delay
     try:
         o_date       = pd.to_datetime(filtered_df["Order Date"], dayfirst=True, errors="coerce")
         s_date       = pd.to_datetime(filtered_df["Ship Date"],  dayfirst=True, errors="coerce")
@@ -450,14 +464,14 @@ if dataset_loaded and not filtered_df.empty:
         avg_shipping = 0.0
 
     metrics = [
-        ("TOTAL SALES",    f"${total_sales:,.0f}"),
-        ("AVG ORDER",      f"${avg_order:,.2f}"),
-        ("TOTAL PROFIT",   f"${total_profit:,.0f}"),
-        ("PROFIT MARGIN",  f"{profit_margin:.1f}%"),
-        ("PROFIT RATIO",   f"{profit_ratio:.3f}"),
-        ("AVG DISCOUNT",   f"{avg_discount:.1f}%"),
-        ("AVG SHIPPING",   f"{avg_shipping:.1f} days"),
-        ("TOTAL RECORDS",  f"{total_records:,}"),
+        ("REVENUE",       f"${total_sales/1_000_000:.1f}M"),
+        ("PROFIT",        f"${total_profit/1_000:.0f}K"),
+        ("ORDERS",        f"{total_records:,}"),
+        ("AVG TICKET",    f"${avg_order:,.0f}"),
+        ("UNITS",         f"{filtered_df['Quantity'].sum():,}" if 'Quantity' in filtered_df.columns else "N/A"),
+        ("DISCOUNT",      f"{avg_discount:.1f}%"),
+        ("MARGIN",        f"{profit_margin:.1f}%"),
+        ("DELIVERY",      f"{avg_shipping:.1f}d"),
     ]
 
     cols = st.columns(8)
@@ -477,7 +491,6 @@ if dataset_loaded and not filtered_df.empty:
     st.markdown('<span class="section-title">Sales and Profit Analysis</span>',
                 unsafe_allow_html=True)
 
-    # Row 1
     r1c1, r1c2, r1c3 = st.columns(3, gap="small")
     with r1c1:
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
@@ -497,7 +510,6 @@ if dataset_loaded and not filtered_df.empty:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Row 2
     r2c1, r2c2, r2c3 = st.columns(3, gap="medium")
     with r2c1:
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
@@ -517,58 +529,104 @@ if dataset_loaded and not filtered_df.empty:
 
     # ── Key Insights Panel ────────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
-    _, ins_col, _ = st.columns([1, 6, 1])
-    with ins_col:
-        try:
-            best_category = filtered_df.groupby("Category")["Sales"].sum().idxmax()
-            best_region   = filtered_df.groupby("Region")["Profit"].sum().idxmax()
+    st.markdown('<span class="section-title">AI-Powered Insights</span>',
+                unsafe_allow_html=True)
+    try:
+        best_category = filtered_df.groupby("Category")["Sales"].sum().idxmax()
+        best_cat_sales = filtered_df.groupby("Category")["Sales"].sum().max()
+        best_region   = filtered_df.groupby("Region")["Profit"].sum().idxmax()
+        temp          = filtered_df.copy()
+        temp["Month"] = temp["Order Date"].dt.strftime("%b %Y")
+        peak_month    = temp.groupby("Month")["Sales"].sum().idxmax()
+        loss_orders   = len(filtered_df[filtered_df["Profit"] < 0])
+        loss_pct      = (loss_orders / total_records * 100) if total_records > 0 else 0
 
-            temp          = filtered_df.copy()
-            temp["Month"] = temp["Order Date"].dt.strftime("%b %Y")
-            peak_month    = temp.groupby("Month")["Sales"].sum().idxmax()
-
-            loss_orders   = len(filtered_df[filtered_df["Profit"] < 0])
-            loss_pct      = (loss_orders / total_records * 100) if total_records > 0 else 0
-
-            sentence = (f"Priority: Reduce losses ({loss_pct:.1f}%) in {best_category}."
-                        if loss_pct > 20
-                        else f"Excellent: {best_region} is leading in profitability.")
-
+        ic1, ic2, ic3, ic4 = st.columns(4)
+        with ic1:
             st.markdown(f"""
-            <div style="background:#FFFFFF;border:1px solid #DDD6FE;
-                        box-shadow:0 4px 16px rgba(109,40,217,0.1);
-                        padding:20px;border-radius:14px;
-                        display:flex;flex-direction:column;gap:10px;">
-                <h3 style="color:#2D1B69;text-align:center;
-                           margin:0;font-size:16px;">Key Insights</h3>
-                <div style="color:#6B7280;font-size:13px;">
-                    <b>Best Category:</b>
-                    <span style="color:#2D1B69;float:right;">{best_category}</span>
+            <div class="insight-card-green">
+                <div style="font-size:12px;color:#86efac;font-weight:700;margin-bottom:4px;">
+                    Top Category
                 </div>
-                <div style="color:#6B7280;font-size:13px;">
-                    <b>Best Region:</b>
-                    <span style="color:#2D1B69;float:right;">{best_region}</span>
-                </div>
-                <div style="color:#6B7280;font-size:13px;">
-                    <b>Peak Month:</b>
-                    <span style="color:#2D1B69;float:right;">{peak_month}</span>
-                </div>
-                <div style="color:#6B7280;font-size:13px;">
-                    <b>Loss Percentage:</b>
-                    <span style="color:#2D1B69;float:right;">{loss_pct:.1f}%</span>
-                </div>
-                <div style="color:#7C3AED;font-size:12px;font-style:italic;
-                            text-align:center;padding-top:10px;
-                            border-top:1px solid #EDE9FE;">
-                    {sentence}
+                <div style="font-size:14px;color:#bbf7d0;font-weight:600;">
+                    {best_category} leads with ${best_cat_sales:,.0f} in sales
                 </div>
             </div>
             """, unsafe_allow_html=True)
-        except Exception as e:
-            st.warning(f"Insights unavailable: {e}")
+        with ic2:
+            st.markdown(f"""
+            <div class="insight-card-blue">
+                <div style="font-size:12px;color:#93c5fd;font-weight:700;margin-bottom:4px;">
+                    Best Region
+                </div>
+                <div style="font-size:14px;color:#bfdbfe;font-weight:600;">
+                    {best_region} shows strongest performance
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        with ic3:
+            st.markdown(f"""
+            <div class="insight-card-olive">
+                <div style="font-size:12px;color:#bef264;font-weight:700;margin-bottom:4px;">
+                    Peak Month
+                </div>
+                <div style="font-size:14px;color:#d9f99d;font-weight:600;">
+                    {peak_month} has highest sales volume
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        with ic4:
+            st.markdown(f"""
+            <div class="insight-card-red">
+                <div style="font-size:12px;color:#fca5a5;font-weight:700;margin-bottom:4px;">
+                    Margin Alert
+                </div>
+                <div style="font-size:14px;color:#fecaca;font-weight:600;">
+                    {loss_pct:.1f}% transactions at a loss
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    except Exception as e:
+        st.warning(f"Insights unavailable: {e}")
 
 elif dataset_loaded and filtered_df.empty:
     st.info("No data matches the selected filters. Please adjust the filters in the sidebar.")
+
+st.markdown("---")
+
+# ── View Detailed Data ────────────────────────────────────────────────
+if dataset_loaded and not filtered_df.empty:
+    with st.expander("View Detailed Data", expanded=False):
+        st.markdown(f"""
+        <p style="color:#A0A0C0;font-size:13px;margin-bottom:12px;">
+            Showing <b style="color:#C084FC;">{len(filtered_df):,}</b> records
+            based on current filter selection.
+        </p>
+        """, unsafe_allow_html=True)
+
+        # Build display dataframe with formatted columns
+        display_df = filtered_df[[
+            col for col in [
+                'Region', 'Category', 'Sub-Category', 'Product Name',
+                'Sales', 'Profit', 'Quantity', 'Discount', 'Order Date'
+            ] if col in filtered_df.columns
+        ]].copy()
+
+        # Format numeric columns
+        if 'Sales' in display_df.columns:
+            display_df['Sales'] = display_df['Sales'].apply(lambda x: f"${x:,.0f}")
+        if 'Profit' in display_df.columns:
+            display_df['Profit'] = display_df['Profit'].apply(lambda x: f"${x:,.0f}")
+        if 'Discount' in display_df.columns:
+            display_df['Discount'] = display_df['Discount'].apply(lambda x: f"{x*100:.0f}%")
+        if 'Order Date' in display_df.columns:
+            display_df['Order Date'] = display_df['Order Date'].dt.strftime('%Y-%m-%d')
+
+        st.dataframe(
+            display_df,
+            use_container_width=True,
+            height=400
+        )
 
 st.markdown("---")
 
@@ -664,8 +722,8 @@ if st.session_state.chat_open:
 
     chat_container.float(
         "bottom: 120px; right: 24px; width: 360px; "
-        "background-color: #F8F5FF; border-radius: 18px; "
-        "box-shadow: 0 8px 32px rgba(109,40,217,0.18); "
-        "border: 1px solid #DDD6FE; padding: 0 14px 14px 14px; "
+        "background-color: #1E1E2E; border-radius: 18px; "
+        "box-shadow: 0 0 30px rgba(123,47,190,0.3); "
+        "border: 1px solid #3D3D6E; padding: 0 14px 14px 14px; "
         "max-height: 520px; overflow-y: auto; z-index: 999;"
     )
