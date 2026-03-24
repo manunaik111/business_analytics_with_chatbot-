@@ -1,58 +1,44 @@
-# AI Internship Project
+# AI Chatbot with Company Data Analysis
 
-## Project Description
-This project is developed as part of the AI internship program. The goal is to build and demonstrate different AI modules using Google Colab and GitHub for collaborative development. Each team member is responsible for developing specific modules.
+**Team 5 — Integration & Interface**
 
-## Team Structure
-Team Lead: Naheen Kauser
+This branch contains the integration layer that connects all project modules into a single working application.
 
-Team Members:
-1.  Nazhat Aliya Naikwadi – Data Engineering
-2.  Snehal Anil Kamble  – Data Engineering
-3.  Keerti G – NLP & Intent Recognition
-4.  Dhaval Shah – NLP & Intent Recognition
-5.  Mohammed Ammar Bin Zameer – Analytics
-6.  Yusuf Chonche – Analytics
-7.  Samruddhi Patil – Visualization & Insight
-8.  Anoosha Kembhavi – Visualization & Insight
-9.  Manu P Naik– Integration & Interface
-10. Vaishnavi Metri – Integration & Interface
+---
 
-## Module Structure
-Each member is responsible for a specific module. The modules are developed in Google Colab and uploaded to GitHub in their respective folders.
+## What Team 5 Built
 
-Example:
-- module-1 - Data Engineering
-- module-2 - NLP & Intent Recognition
-- module-3 - Analytics
-- module-4 - Visualization & Insight
-- module-5 - Integration & Interface
+- `main_app.py` — application entry point integrating all modules
+- `chatbot/chatbot_engine.py` — AI chatbot with stateful conversation memory
+- `report_generator.py` — PDF and Excel report generation
+- Full Streamlit UI with floating chatbot interface
+- Sidebar filters connected to all dashboard components
+- Startup loading screen and error handling
 
-Each module contains:
-- Google Colab notebook
-- Documentation
-- Output results
+---
 
-## GitHub Workflow
-We follow a structured Git workflow:
+## Setup
 
-1. Developers work on the **qa branch**
-2. After testing → code moves to **uat branch**
-3. Final stable version → merged into **main branch**
+```bash
+git clone https://github.com/manunaik111/AI-Sales-Chatbot-System.git
+cd AI-Sales-Chatbot-System
+py -3.11 -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+python -m nltk.downloader punkt stopwords punkt_tab
+```
 
-Workflow:
+Create `.streamlit/secrets.toml`:
+```toml
+AI_API_KEY = "your-groq-api-key"
+```
 
-Developer → QA → UAT → MAIN
+```bash
+streamlit run main_app.py
+```
 
-## Tools Used
-- Python
-- Google Colab
-- GitHub
-- Machine Learning Libraries
+---
 
-## Contribution Guidelines
-1. Clone the repository
-2. Create or use the **qa branch**
-3. Upload module work
-4. Create a Pull Request
-5. Team Lead reviews and merges
+## Tech Stack
+
+Python 3.11 · Streamlit · Groq API · Pandas · fpdf2 · openpyxl · streamlit-float

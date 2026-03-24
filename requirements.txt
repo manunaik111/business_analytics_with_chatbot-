@@ -1,3 +1,33 @@
-nltk
-scikit-learn
-pandas
+# Requirements for AI Sales Chatbot System
+# Team 5 - Integration & Interface
+
+# Core
+streamlit==1.43.2
+
+# AI API
+groq==0.28.0
+
+# Data
+pandas==2.2.3
+numpy==1.26.4
+pyarrow==17.0.0
+openpyxl==3.1.5
+
+# Report Generation
+fpdf2==2.8.3
+
+# NLP
+nltk==3.9.1
+scikit-learn==1.3.2
+thefuzz==0.22.1
+python-Levenshtein==0.25.1
+
+# Visualization
+plotly==5.24.1
+
+# Streamlit extras
+streamlit-float==0.3.5
+
+# Utilities
+python-dotenv==1.0.1
+requests==2.32.3
