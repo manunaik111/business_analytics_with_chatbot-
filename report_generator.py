@@ -99,7 +99,7 @@ def generate_excel_report(analyzer):
 
 # ── PDF Report ────────────────────────────────────────────────────────
 class SalesPDF(FPDF):
-   def header(self):
+    def header(self):
         self.set_fill_color(74, 35, 90)
         self.rect(0, 0, 210, 16, 'F')
         self.set_font('Helvetica', 'B', 13)
