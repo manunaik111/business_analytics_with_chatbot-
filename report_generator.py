@@ -101,12 +101,13 @@ def generate_excel_report(analyzer):
 class SalesPDF(FPDF):
     def header(self):
         self.set_fill_color(74, 35, 90)
-        self.rect(0, 0, 210, 20, 'F')
+        self.rect(0, 0, 210, 28, 'F')
         self.set_font('Helvetica', 'B', 14)
         self.set_text_color(255, 255, 255)
-        self.cell(0, 10, 'AI Sales Analytics Dashboard - Report', align='C', ln=True)
+        self.set_y(8)
+        self.cell(0, 12, 'AI Sales Analytics Dashboard - Report', align='C', ln=True)
         self.set_text_color(0, 0, 0)
-        self.ln(4)
+        self.ln(6)
 
     def footer(self):
         self.set_y(-15)
