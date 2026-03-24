@@ -611,13 +611,13 @@ if dataset_loaded and not filtered_df.empty:
         ( "Total Profit",   fmt(kpis.get("total_profit",0),  pre="$"),           "Profit",                "linear-gradient(90deg,#86EFAC,#22C55E)"),
         ( "Profit Margin",  fmt(kpis.get("profit_margin",0), suf="%", dec=1),    "Profit",                "linear-gradient(90deg,#FCD34D,#F59E0B)"),
         ( "Profit Ratio",   fmt(kpis.get("profit_ratio",0),  suf="%", dec=1),    "Profit",                "linear-gradient(90deg,#F9A8D4,#EC4899)"),
-        ("Avg Discount",   fmt(kpis.get("avg_discount",0),  suf="%", dec=1),    "Discount",              "linear-gradient(90deg,#FCA5A5,#EF4444)"),
+        ( "Avg Discount",   fmt(kpis.get("avg_discount",0),  suf="%", dec=1),    "Discount",              "linear-gradient(90deg,#FCA5A5,#EF4444)"),
         ( "Avg Shipping",   fmt(kpis.get("avg_shipping",0),  suf="d", dec=1),    "shipping_delay_days",   "linear-gradient(90deg,#6EE7B7,#10B981)"),
         ( "Total Records",  fmt(kpis.get("total_records",0)),                    "Sales",                 "linear-gradient(90deg,#C4B5FD,#7C3AED)"),
     ]
 
     cols = st.columns(8)
-    for i, (icon, label, value, spark_col, grad) in enumerate(kpi_data):
+    for i, ( label, value, spark_col, grad) in enumerate(kpi_data):
         with cols[i]:
             st.markdown(f"""
             <div class="kpi-card">
