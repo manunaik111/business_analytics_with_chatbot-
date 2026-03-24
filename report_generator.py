@@ -1,259 +1,323 @@
-# report_generator.py
-# Team 5 — Integration & Interface
-# Generates PDF and Excel reports from sales data
+# report_generator.py  (reportlab rewrite — professional styling)
+# Generates a polished PDF sales report from raw data dicts.
 
 import io
-import pandas as pd
-from fpdf import FPDF
 from datetime import datetime
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.units import mm
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+    HRFlowable, KeepTogether
+)
+from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate
+
+# ── Brand palette ────────────────────────────────────────────────────────────
+PURPLE      = colors.HexColor("#4A235A")
+PURPLE_LIGHT= colors.HexColor("#7D3C98")
+PURPLE_BG   = colors.HexColor("#F5EEF8")
+PURPLE_ROW  = colors.HexColor("#EBD5F5")
+WHITE       = colors.white
+GREY_TEXT   = colors.HexColor("#555555")
+GREY_LIGHT  = colors.HexColor("#F9F9F9")
+GREY_BORDER = colors.HexColor("#CCCCCC")
+GREEN       = colors.HexColor("#1E8449")
+RED         = colors.HexColor("#C0392B")
+BLACK       = colors.black
+
+PAGE_W, PAGE_H = A4
+MARGIN = 18 * mm
 
 
-# ── Excel Report ──────────────────────────────────────────────────────
-def generate_excel_report(analyzer):
-    df = analyzer.df
+# ── Header / Footer via canvas ────────────────────────────────────────────────
+def _header_footer(canvas, doc):
+    canvas.saveState()
+    w, h = A4
 
-    output = io.BytesIO()
+    # Header bar
+    canvas.setFillColor(PURPLE)
+    canvas.rect(0, h - 22*mm, w, 22*mm, fill=1, stroke=0)
 
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+    # Title in header
+    canvas.setFont("Helvetica-Bold", 14)
+    canvas.setFillColor(WHITE)
+    canvas.drawCentredString(w / 2, h - 13*mm, "AI Sales Analytics Dashboard")
 
-        # Sheet 1 — KPI Summary
-        total_sales   = df['Sales'].sum()
-        total_profit  = df['Profit'].sum()
-        total_orders  = len(df)
-        avg_order     = df['Sales'].mean()
-        profit_margin = (total_profit / total_sales * 100) if total_sales else 0
+    # Subtitle
+    canvas.setFont("Helvetica", 9)
+    canvas.setFillColor(colors.HexColor("#D7BDE2"))
+    canvas.drawCentredString(w / 2, h - 18*mm, "Sales Performance Report")
 
-        kpi_data = pd.DataFrame({
-            'Metric': [
-                'Total Sales',
-                'Total Profit',
-                'Total Orders',
-                'Average Order Value',
-                'Profit Margin %'
-            ],
-            'Value': [
-                f"${total_sales:,.2f}",
-                f"${total_profit:,.2f}",
-                f"{total_orders:,}",
-                f"${avg_order:,.2f}",
-                f"{profit_margin:.1f}%"
-            ]
-        })
-        kpi_data.to_excel(writer, sheet_name='KPI Summary', index=False)
+    # Thin accent line below header
+    canvas.setStrokeColor(PURPLE_LIGHT)
+    canvas.setLineWidth(1.5)
+    canvas.line(MARGIN, h - 23*mm, w - MARGIN, h - 23*mm)
 
-        # Sheet 2 — Sales by Region
-        region_df = df.groupby('Region').agg(
-            Total_Sales=('Sales', 'sum'),
-            Total_Profit=('Profit', 'sum'),
-            Total_Orders=('Order ID', 'count')
-        ).reset_index().sort_values('Total_Sales', ascending=False)
-        region_df['Total_Sales']  = region_df['Total_Sales'].round(2)
-        region_df['Total_Profit'] = region_df['Total_Profit'].round(2)
-        region_df.to_excel(writer, sheet_name='Sales by Region', index=False)
+    # Footer bar
+    canvas.setFillColor(PURPLE)
+    canvas.rect(0, 0, w, 12*mm, fill=1, stroke=0)
+    canvas.setFont("Helvetica-Oblique", 8)
+    canvas.setFillColor(colors.HexColor("#D7BDE2"))
+    generated = datetime.now().strftime("%Y-%m-%d %H:%M")
+    canvas.drawString(MARGIN, 4*mm, f"Generated on {generated}")
+    canvas.drawRightString(w - MARGIN, 4*mm, f"Page {doc.page}")
 
-        # Sheet 3 — Sales by Category
-        cat_df = df.groupby('Category').agg(
-            Total_Sales=('Sales', 'sum'),
-            Total_Profit=('Profit', 'sum'),
-            Total_Orders=('Order ID', 'count')
-        ).reset_index().sort_values('Total_Sales', ascending=False)
-        cat_df['Total_Sales']  = cat_df['Total_Sales'].round(2)
-        cat_df['Total_Profit'] = cat_df['Total_Profit'].round(2)
-        cat_df.to_excel(writer, sheet_name='Sales by Category', index=False)
-
-        # Sheet 4 — Top 20 Products
-        product_df = df.groupby('Product Name').agg(
-            Total_Sales=('Sales', 'sum'),
-            Total_Profit=('Profit', 'sum'),
-            Total_Orders=('Order ID', 'count')
-        ).reset_index().sort_values('Total_Sales', ascending=False).head(20)
-        product_df['Total_Sales']  = product_df['Total_Sales'].round(2)
-        product_df['Total_Profit'] = product_df['Total_Profit'].round(2)
-        product_df.to_excel(writer, sheet_name='Top Products', index=False)
-
-        # Sheet 5 — Monthly Trend
-        if 'Order Date' in df.columns:
-            df['Month'] = df['Order Date'].dt.to_period('M').astype(str)
-            monthly_df  = df.groupby('Month').agg(
-                Total_Sales=('Sales', 'sum'),
-                Total_Profit=('Profit', 'sum'),
-                Total_Orders=('Order ID', 'count')
-            ).reset_index()
-            monthly_df['Total_Sales']  = monthly_df['Total_Sales'].round(2)
-            monthly_df['Total_Profit'] = monthly_df['Total_Profit'].round(2)
-            monthly_df.to_excel(writer, sheet_name='Monthly Trend', index=False)
-
-        # Sheet 6 — Segment Analysis
-        seg_df = df.groupby('Segment').agg(
-            Total_Sales=('Sales', 'sum'),
-            Total_Profit=('Profit', 'sum'),
-            Total_Orders=('Order ID', 'count')
-        ).reset_index().sort_values('Total_Sales', ascending=False)
-        seg_df['Total_Sales']  = seg_df['Total_Sales'].round(2)
-        seg_df['Total_Profit'] = seg_df['Total_Profit'].round(2)
-        seg_df.to_excel(writer, sheet_name='Segment Analysis', index=False)
-
-    output.seek(0)
-    return output
+    canvas.restoreState()
 
 
-# ── PDF Report ────────────────────────────────────────────────────────
-class SalesPDF(FPDF):
-    def header(self):
-        self.set_fill_color(74, 35, 90)
-        self.rect(0, 0, 210, 16, 'F')
-        self.set_font('Helvetica', 'B', 13)
-        self.set_text_color(255, 255, 255)
-        self.set_xy(0, 4)
-        self.cell(210, 8, 'AI Sales Analytics Dashboard - Report', align='C', ln=True)
-        self.set_text_color(0, 0, 0)
-        self.ln(2)
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('Helvetica', 'I', 8)
-        self.set_text_color(150, 150, 150)
-        self.cell(0, 10, f'Generated on {datetime.now().strftime("%Y-%m-%d %H:%M")}  |  Page {self.page_no()}', align='C')
-
-    def section_title(self, title):
-        self.set_fill_color(74, 35, 90)
-        self.set_text_color(255, 255, 255)
-        self.set_font('Helvetica', 'B', 11)
-        self.cell(0, 9, f'  {title}', ln=True, fill=True)
-        self.set_text_color(0, 0, 0)
-        self.ln(2)
-
-    def kpi_row(self, label, value):
-        self.set_font('Helvetica', 'B', 10)
-        self.set_fill_color(240, 230, 255)
-        self.cell(90, 8, f'  {label}', border=1, fill=True)
-        self.set_font('Helvetica', '', 10)
-        self.set_fill_color(255, 255, 255)
-        self.cell(90, 8, f'  {value}', border=1, fill=True, ln=True)
-
-    def table_header(self, cols, widths):
-        self.set_fill_color(74, 35, 90)
-        self.set_text_color(255, 255, 255)
-        self.set_font('Helvetica', 'B', 9)
-        for col, w in zip(cols, widths):
-            self.cell(w, 8, f' {col}', border=1, fill=True)
-        self.ln()
-        self.set_text_color(0, 0, 0)
-
-    def table_row(self, values, widths, fill=False):
-        self.set_font('Helvetica', '', 9)
-        self.set_fill_color(248, 240, 255)
-        for val, w in zip(values, widths):
-            self.cell(w, 7, f' {str(val)}', border=1, fill=fill)
-        self.ln()
+# ── Styles ────────────────────────────────────────────────────────────────────
+def _styles():
+    base = getSampleStyleSheet()
+    return {
+        "section": ParagraphStyle(
+            "section",
+            fontName="Helvetica-Bold",
+            fontSize=11,
+            textColor=WHITE,
+            backColor=PURPLE,
+            leading=18,
+            leftIndent=6,
+            spaceAfter=0,
+        ),
+        "kpi_label": ParagraphStyle(
+            "kpi_label",
+            fontName="Helvetica-Bold",
+            fontSize=10,
+            textColor=PURPLE,
+            leading=14,
+        ),
+        "kpi_value": ParagraphStyle(
+            "kpi_value",
+            fontName="Helvetica-Bold",
+            fontSize=13,
+            textColor=BLACK,
+            leading=18,
+            alignment=TA_RIGHT,
+        ),
+        "note": ParagraphStyle(
+            "note",
+            fontName="Helvetica-Oblique",
+            fontSize=7.5,
+            textColor=GREY_TEXT,
+            leading=10,
+        ),
+    }
 
 
-def generate_pdf_report(analyzer):
-    df = analyzer.df
+# ── Section title block ───────────────────────────────────────────────────────
+def _section_title(title, styles):
+    p = Paragraph(f"&nbsp;&nbsp;{title}", styles["section"])
+    return [p, Spacer(1, 3*mm)]
 
-    pdf = SalesPDF()
-    pdf.set_auto_page_break(auto=True, margin=20)
-    pdf.add_page()
 
-    # ── KPI Section ───────────────────────────────────────────────────
-    total_sales   = df['Sales'].sum()
-    total_profit  = df['Profit'].sum()
-    total_orders  = len(df)
-    avg_order     = df['Sales'].mean()
-    profit_margin = (total_profit / total_sales * 100) if total_sales else 0
-
-    pdf.section_title("Key Performance Indicators")
-    pdf.kpi_row("Total Sales",          f"${total_sales:,.2f}")
-    pdf.kpi_row("Total Profit",         f"${total_profit:,.2f}")
-    pdf.kpi_row("Total Orders",         f"{total_orders:,}")
-    pdf.kpi_row("Average Order Value",  f"${avg_order:,.2f}")
-    pdf.kpi_row("Overall Profit Margin", f"{profit_margin:.1f}%")
-    pdf.ln(6)
-
-    # ── Sales by Region ───────────────────────────────────────────────
-    pdf.section_title("Sales by Region")
-    region_df = df.groupby('Region').agg(
-        Sales=('Sales', 'sum'),
-        Profit=('Profit', 'sum'),
-        Orders=('Order ID', 'count')
-    ).reset_index().sort_values('Sales', ascending=False)
-
-    pdf.table_header(
-        ['Region', 'Total Sales', 'Total Profit', 'Orders'],
-        [45, 50, 50, 35]
-    )
-    for i, row in region_df.iterrows():
-        pdf.table_row(
-            [row['Region'], f"${row['Sales']:,.0f}",
-             f"${row['Profit']:,.0f}", f"{row['Orders']:,}"],
-            [45, 50, 50, 35],
-            fill=(i % 2 == 0)
-        )
-    pdf.ln(6)
-
-    # ── Sales by Category ─────────────────────────────────────────────
-    pdf.section_title("Sales by Category")
-    cat_df = df.groupby('Category').agg(
-        Sales=('Sales', 'sum'),
-        Profit=('Profit', 'sum'),
-        Orders=('Order ID', 'count')
-    ).reset_index().sort_values('Sales', ascending=False)
-
-    pdf.table_header(
-        ['Category', 'Total Sales', 'Total Profit', 'Orders'],
-        [55, 45, 45, 35]
-    )
-    for i, row in cat_df.iterrows():
-        pdf.table_row(
-            [row['Category'], f"${row['Sales']:,.0f}",
-             f"${row['Profit']:,.0f}", f"{row['Orders']:,}"],
-            [55, 45, 45, 35],
-            fill=(i % 2 == 0)
-        )
-    pdf.ln(6)
-
-    # ── Top 10 Products ───────────────────────────────────────────────
-    pdf.section_title("Top 10 Products by Sales")
-    product_df = df.groupby('Product Name').agg(
-        Sales=('Sales', 'sum'),
-        Profit=('Profit', 'sum')
-    ).reset_index().sort_values('Sales', ascending=False).head(10)
-
-    pdf.table_header(
-        ['Product Name', 'Total Sales', 'Total Profit'],
-        [110, 40, 40]
-    )
-    for i, row in product_df.iterrows():
-        name = row['Product Name'][:45] + '...' if len(row['Product Name']) > 45 else row['Product Name']
-        pdf.table_row(
-            [name, f"${row['Sales']:,.0f}", f"${row['Profit']:,.0f}"],
-            [110, 40, 40],
-            fill=(i % 2 == 0)
-        )
-    pdf.ln(6)
-
-    # ── Monthly Trend ─────────────────────────────────────────────────
-    if 'Order Date' in df.columns:
-        pdf.section_title("Monthly Sales Trend")
-        df['Month'] = df['Order Date'].dt.to_period('M').astype(str)
-        monthly_df  = df.groupby('Month').agg(
-            Sales=('Sales', 'sum'),
-            Orders=('Order ID', 'count')
-        ).reset_index().tail(12)
-
-        pdf.table_header(
-            ['Month', 'Total Sales', 'Orders'],
-            [60, 60, 60]
-        )
-        for i, row in monthly_df.iterrows():
-            pdf.table_row(
-                [row['Month'], f"${row['Sales']:,.0f}", f"{row['Orders']:,}"],
-                [60, 60, 60],
-                fill=(i % 2 == 0)
+# ── KPI cards (2-column grid) ─────────────────────────────────────────────────
+def _kpi_section(kpis, styles):
+    """kpis: list of (label, value) tuples"""
+    rows = []
+    for i in range(0, len(kpis), 2):
+        pair = kpis[i: i + 2]
+        cells = []
+        for label, value in pair:
+            inner = Table(
+                [[Paragraph(label, styles["kpi_label"])],
+                 [Paragraph(value, styles["kpi_value"])]],
+                colWidths=["100%"],
             )
+            inner.setStyle(TableStyle([
+                ("BACKGROUND",  (0, 0), (-1, -1), PURPLE_BG),
+                ("TOPPADDING",  (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("LEFTPADDING",  (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("ROUNDEDCORNERS", [4]),
+            ]))
+            cells.append(inner)
+        if len(cells) == 1:
+            cells.append("")       # pad odd count
+        rows.append(cells)
 
-    output = io.BytesIO()
-    pdf_bytes = pdf.output()
-    output.write(pdf_bytes)
-    output.seek(0)
-    return output
+    avail = PAGE_W - 2 * MARGIN
+    col_w = (avail - 6*mm) / 2
+
+    t = Table(rows, colWidths=[col_w, col_w], spaceBefore=0)
+    t.setStyle(TableStyle([
+        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING",   (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
+        ("COLPADDING",   (0, 0), (-1, -1), 3),
+    ]))
+    return [t, Spacer(1, 6*mm)]
+
+
+# ── Generic data table ────────────────────────────────────────────────────────
+def _data_table(headers, rows, col_widths=None):
+    avail = PAGE_W - 2 * MARGIN
+    n = len(headers)
+
+    if col_widths is None:
+        col_widths = [avail / n] * n
+
+    style_cells = ParagraphStyle(
+        "tc", fontName="Helvetica", fontSize=8.5,
+        textColor=BLACK, leading=11, wordWrap="CJK"
+    )
+    style_header = ParagraphStyle(
+        "th", fontName="Helvetica-Bold", fontSize=8.5,
+        textColor=WHITE, leading=11
+    )
+
+    header_row = [Paragraph(h, style_header) for h in headers]
+    data_rows = []
+    for row in rows:
+        data_rows.append([Paragraph(str(c), style_cells) for c in row])
+
+    table_data = [header_row] + data_rows
+
+    t = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+    row_styles = [
+        ("BACKGROUND",   (0, 0), (-1, 0),  PURPLE),
+        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [WHITE, PURPLE_BG]),
+        ("GRID",         (0, 0), (-1, -1), 0.4, GREY_BORDER),
+        ("LINEBELOW",    (0, 0), (-1, 0),  1.2, PURPLE_LIGHT),
+        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",   (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 5),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+    ]
+    t.setStyle(TableStyle(row_styles))
+    return [t, Spacer(1, 6*mm)]
+
+
+# ── Main generator ────────────────────────────────────────────────────────────
+def generate_pdf_report_rl(data: dict) -> bytes:
+    """
+    data keys expected:
+      kpis          : list of (label, value)
+      region_rows   : list of [region, sales, profit, orders]
+      category_rows : list of [category, sales, profit, orders]
+      product_rows  : list of [name, sales, profit]
+      monthly_rows  : list of [month, sales, orders]
+    """
+    buf = io.BytesIO()
+
+    doc = BaseDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=MARGIN,
+        rightMargin=MARGIN,
+        topMargin=27*mm,
+        bottomMargin=16*mm,
+    )
+
+    frame = Frame(
+        MARGIN, 16*mm,
+        PAGE_W - 2*MARGIN, PAGE_H - 27*mm - 16*mm,
+        id="main"
+    )
+    doc.addPageTemplates([PageTemplate(id="main", frames=[frame],
+                                       onPage=_header_footer)])
+
+    styles = _styles()
+    story  = []
+
+    # ── KPI ──────────────────────────────────────────────────────────────────
+    story += _section_title("Key Performance Indicators", styles)
+    story += _kpi_section(data["kpis"], styles)
+
+    # ── Sales by Region ───────────────────────────────────────────────────────
+    story += _section_title("Sales by Region", styles)
+    story += _data_table(
+        ["Region", "Total Sales", "Total Profit", "Orders"],
+        data["region_rows"],
+        col_widths=[55*mm, 45*mm, 45*mm, 30*mm],
+    )
+
+    # ── Sales by Category ─────────────────────────────────────────────────────
+    story += _section_title("Sales by Category", styles)
+    story += _data_table(
+        ["Category", "Total Sales", "Total Profit", "Orders"],
+        data["category_rows"],
+        col_widths=[60*mm, 45*mm, 45*mm, 25*mm],
+    )
+
+    # ── Top 10 Products ───────────────────────────────────────────────────────
+    story += _section_title("Top 10 Products by Sales", styles)
+    story += _data_table(
+        ["Product Name", "Total Sales", "Total Profit"],
+        data["product_rows"],
+        col_widths=[115*mm, 38*mm, 22*mm],
+    )
+
+    # ── Monthly Trend ─────────────────────────────────────────────────────────
+    if data.get("monthly_rows"):
+        story += _section_title("Monthly Sales Trend", styles)
+        story += _data_table(
+            ["Month", "Total Sales", "Orders"],
+            data["monthly_rows"],
+            col_widths=[58*mm, 58*mm, 59*mm],
+        )
+
+    doc.build(story)
+    return buf.getvalue()
+
+
+# ── Standalone demo (uses hardcoded data from the uploaded report) ─────────────
+if __name__ == "__main__":
+    demo_data = {
+        "kpis": [
+            ("Total Sales",          "$2,297,200.86"),
+            ("Total Profit",         "$286,397.02"),
+            ("Total Orders",         "9,994"),
+            ("Average Order Value",  "$229.86"),
+            ("Overall Profit Margin","12.5%"),
+        ],
+        "region_rows": [
+            ["West",    "$725,458", "$108,418", "3,203"],
+            ["East",    "$678,781", "$91,523",  "2,848"],
+            ["Central", "$501,240", "$39,706",  "2,323"],
+            ["South",   "$391,722", "$46,749",  "1,620"],
+        ],
+        "category_rows": [
+            ["Technology",     "$836,154", "$145,455", "1,847"],
+            ["Furniture",      "$742,000", "$18,451",  "2,121"],
+            ["Office Supplies","$719,047", "$122,491", "6,026"],
+        ],
+        "product_rows": [
+            ["Canon imageCLASS 2200 Advanced Copier",                    "$61,600",  "$25,200"],
+            ["Fellowes PB500 Electric Punch Plastic Comb Binding Machine","$27,453",  "$7,753"],
+            ["Cisco TelePresence System EX90 Videoconferencing Unit",    "$22,638",  "-$1,811"],
+            ["HON 5400 Series Task Chairs for Big and Tall",             "$21,871",  "$0"],
+            ["GBC DocuBind TL300 Electric Binding System",               "$19,823",  "$2,234"],
+            ["GBC Ibimaster 500 Manual ProClick Binding System",         "$19,024",  "$761"],
+            ["Hewlett Packard LaserJet 3310 Copier",                     "$18,840",  "$6,984"],
+            ["HP Designjet T520 Inkjet Large Format Printer",            "$18,375",  "$4,095"],
+            ["GBC DocuBind P400 Electric Binding System",                "$17,965",  "-$1,878"],
+            ["High Speed Automatic Electric Letter Opener",              "$17,030",  "-$262"],
+        ],
+        "monthly_rows": [
+            ["2019-01", "$47,961", "206"],
+            ["2019-02", "$44,950", "199"],
+            ["2019-03", "$44,704", "210"],
+            ["2019-04", "$47,600", "202"],
+            ["2019-05", "$66,415", "239"],
+            ["2019-06", "$52,509", "197"],
+            ["2019-07", "$44,217", "234"],
+            ["2019-08", "$52,786", "205"],
+            ["2019-09", "$47,374", "179"],
+            ["2019-10", "$58,836", "252"],
+            ["2019-11", "$51,559", "215"],
+            ["2019-12", "$48,016", "222"],
+        ],
+    }
+
+    pdf_bytes = generate_pdf_report_rl(demo_data)
+    out_path = "/mnt/user-data/outputs/sales_report_fixed.pdf"
+    with open(out_path, "wb") as f:
+        f.write(pdf_bytes)
+    print(f"Saved → {out_path}  ({len(pdf_bytes):,} bytes)")
