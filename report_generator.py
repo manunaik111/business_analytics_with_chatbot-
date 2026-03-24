@@ -104,7 +104,7 @@ class SalesPDF(FPDF):
         self.rect(0, 0, 210, 20, 'F')
         self.set_font('Helvetica', 'B', 14)
         self.set_text_color(255, 255, 255)
-        self.cell(0, 20, 'AI Sales Analytics Dashboard - Report', align='C', ln=True)
+        self.cell(0, 30, 'AI Sales Analytics Dashboard - Report', align='C', ln=True)
         self.set_text_color(0, 0, 0)
         self.ln(4)
 
