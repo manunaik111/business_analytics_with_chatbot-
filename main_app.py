@@ -617,7 +617,7 @@ if dataset_loaded and not filtered_df.empty:
     ]
 
     cols = st.columns(8)
-    for i, ( label, value, spark_col, grad) in enumerate(kpi_data):
+    for i, (icon, label, value, spark_col, grad) in enumerate(kpi_data):
         with cols[i]:
             st.markdown(f"""
             <div class="kpi-card">
@@ -625,7 +625,6 @@ if dataset_loaded and not filtered_df.empty:
                 <div class="kpi-body">
                     <div class="kpi-header-row">
                         <span class="kpi-label">{label}</span>
-                        <span class="kpi-icon">{icon}</span>
                     </div>
                     <div class="kpi-value" style="background:{grad};
                         -webkit-background-clip:text;-webkit-text-fill-color:transparent;
