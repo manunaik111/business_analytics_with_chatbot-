@@ -43,12 +43,12 @@ st.markdown("""
 <style>
 
 
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 #MainMenu {visibility: hidden;}
 footer    {visibility: hidden;}
 
-* { font-family: 'Oswald', sans-serif !important; }
+* { font-family: 'Inter', sans-serif !important; }
 /* Streamlit uses Material Symbols ligatures for many UI icons (including expander chevrons).
    Our global font override would turn icons into visible text like "_arrow_downward_". */
 .material-icons,
@@ -84,9 +84,6 @@ button[data-testid="baseButton-headerNoPadding"] span,
     max-width: 100% !important;
 }
 h1,h2,h3,p,span,div,label { color: #E0E0E0 !important; }
-h1 { font-family: 'Oswald', sans-serif !important; font-weight: 700 !important; letter-spacing: 2px !important; }
-h2 { font-family: 'Oswald', sans-serif !important; font-weight: 600 !important; letter-spacing: 1.5px !important; }
-h3 { font-family: 'Oswald', sans-serif !important; font-weight: 500 !important; letter-spacing: 1px !important; }
 
 /* ── 2. Animated gradient title ── */
 @keyframes gradientShift {
