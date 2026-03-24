@@ -47,6 +47,27 @@ st.markdown("""
 footer    {visibility: hidden;}
 
 * { font-family: 'Inter', sans-serif !important; }
+/* Streamlit uses Material Symbols ligatures for many UI icons (including expander chevrons).
+   Our global font override would turn icons into visible text like "_arrow_downward_". */
+.material-icons,
+.material-symbols-outlined,
+.material-symbols-rounded,
+.material-symbols-sharp {
+    font-family: "Material Symbols Rounded","Material Symbols Outlined","Material Icons",sans-serif !important;
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
+}
+[data-testid="stExpander"] summary span,
+[data-testid="stExpander"] summary svg,
+[data-testid="stExpander"] button span,
+[data-testid="stExpander"] .material-symbols-rounded,
+[data-testid="stExpander"] .material-symbols-outlined,
+[data-testid="stExpander"] .material-icons,
+button[data-testid="baseButton-headerNoPadding"] span,
+[data-testid="stExpanderToggleIcon"] {
+    font-family: "Material Symbols Rounded","Material Symbols Outlined","Material Icons",sans-serif !important;
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
+
+}
 
 /* ── 1. Base dark background with subtle radial glow ── */
 .stApp {
@@ -609,19 +630,47 @@ if dataset_loaded and not filtered_df.empty:
                 unsafe_allow_html=True)
 
     kpi_data = [
-        ( "Total Sales",    fmt(kpis.get("total_sales",0),   pre="$"),          "Sales",                 "linear-gradient(90deg,#C084FC,#818CF8)"),
-        ( "Avg Order",      fmt(kpis.get("avg_order",0),     pre="$", dec=2),    "Sales",                 "linear-gradient(90deg,#38BDF8,#0EA5E9)"),
-        ( "Total Profit",   fmt(kpis.get("total_profit",0),  pre="$"),           "Profit",                "linear-gradient(90deg,#86EFAC,#22C55E)"),
-        ( "Profit Margin",  fmt(kpis.get("profit_margin",0), suf="%", dec=1),    "Profit",                "linear-gradient(90deg,#FCD34D,#F59E0B)"),
-        ( "Profit Ratio",   fmt(kpis.get("profit_ratio",0),  suf="%", dec=1),    "Profit",                "linear-gradient(90deg,#F9A8D4,#EC4899)"),
-        ( "Avg Discount",   fmt(kpis.get("avg_discount",0),  suf="%", dec=1),    "Discount",              "linear-gradient(90deg,#FCA5A5,#EF4444)"),
-        ( "Avg Shipping",   fmt(kpis.get("avg_shipping",0),  suf="d", dec=1),    "shipping_delay_days",   "linear-gradient(90deg,#6EE7B7,#10B981)"),
-        ( "Total Records",  fmt(kpis.get("total_records",0)),                    "Sales",                 "linear-gradient(90deg,#C4B5FD,#7C3AED)"),
+        ("Total Sales",    fmt(kpis.get("total_sales",0),   pre="$"),          "Sales",               "linear-gradient(90deg,#C084FC,#818CF8)"),
+        ("Avg Order Value",fmt(kpis.get("avg_order",0),     pre="$", dec=2),   "Sales",               "linear-gradient(90deg,#38BDF8,#0EA5E9)"),
+        ("Total Profit",   fmt(kpis.get("total_profit",0),  pre="$"),          "Profit",              "linear-gradient(90deg,#86EFAC,#22C55E)"),
+        ("Profit Margin",  fmt(kpis.get("profit_margin",0), suf="%", dec=1),   "Profit",              "linear-gradient(90deg,#FCD34D,#F59E0B)"),
+        ("Profit Ratio",   fmt(kpis.get("profit_ratio",0),  suf="%", dec=1),   "Profit",              "linear-gradient(90deg,#F9A8D4,#EC4899)"),
+        ("Avg Discount",   fmt(kpis.get("avg_discount",0),  suf="%", dec=1),   "Discount",            "linear-gradient(90deg,#FCA5A5,#EF4444)"),
+        ("Avg Shipping",   fmt(kpis.get("avg_shipping",0),  suf=" days",dec=0),"shipping_delay_days", "linear-gradient(90deg,#6EE7B7,#10B981)"),
+        ("Total Records",  fmt(kpis.get("total_records",0)),                   "Sales",               "linear-gradient(90deg,#C4B5FD,#7C3AED)"),
     ]
 
-    cols = st.columns(8)
-    for i, ( label, value, spark_col, grad) in enumerate(kpi_data):
-        with cols[i]:
+    # ── Row 1: first 4 KPIs ──
+    row1 = st.columns(4, gap="medium")
+    for i in range(4):
+        label, value, spark_col, grad = kpi_data[i]
+        with row1[i]:
+            st.markdown(f"""
+            <div class="kpi-card">
+                <div class="kpi-top-bar" style="background:{grad};"></div>
+                <div class="kpi-body">
+                    <div class="kpi-header-row">
+                        <span class="kpi-label">{label}</span>
+                    </div>
+                    <div class="kpi-value" style="background:{grad};
+                        -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                        background-clip:text;">{value}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            if spark_col in filtered_df.columns:
+                fig = mini_line(filtered_df, spark_col)
+                st.plotly_chart(fig, use_container_width=True,
+                                config={'displayModeBar': False},
+                                key=f"spark_{i}")
+
+    st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
+
+    # ── Row 2: last 4 KPIs ──
+    row2 = st.columns(4, gap="medium")
+    for i in range(4, 8):
+        label, value, spark_col, grad = kpi_data[i]
+        with row2[i - 4]:
             st.markdown(f"""
             <div class="kpi-card">
                 <div class="kpi-top-bar" style="background:{grad};"></div>
@@ -844,7 +893,14 @@ if dataset_loaded and not filtered_df.empty:
         if 'Discount'   in display_df.columns: display_df['Discount']   = display_df['Discount'].apply(lambda x: f"{x*100:.0f}%")
         if 'Order Date' in display_df.columns: display_df['Order Date'] = display_df['Order Date'].dt.strftime('%Y-%m-%d')
 
-        st.dataframe(display_df, use_container_width=True, height=380)
+        try:
+            st.dataframe(display_df, use_container_width=True, height=380)
+        except ModuleNotFoundError as e:
+            if "pyarrow" in str(e):
+                st.warning("pyarrow is not installed, showing static table instead.")
+                st.table(display_df.head(300))
+            else:
+                raise
 
 st.markdown('<div class="glow-divider"></div>', unsafe_allow_html=True)
 

@@ -28,7 +28,8 @@ def get_analyzer():
         )
     )
     analyzer.load_and_validate_data()
-    analyzer.clean_data()
+    # Keep original dataset row count for dashboard totals.
+    # main_app handles any lightweight normalization it needs.
     analyzer.calculate_features()
     return analyzer
 
