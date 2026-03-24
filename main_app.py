@@ -41,12 +41,12 @@ if 'api_error'   not in st.session_state: st.session_state.api_error   = None
 # ── Premium Midnight Aurora CSS ───────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
 
 #MainMenu {visibility: hidden;}
 footer    {visibility: hidden;}
 
-* { font-family: 'Inter', sans-serif !important; }
+* { font-family: 'Times New Roman', Times, serif !important; }
 /* Streamlit uses Material Symbols ligatures for many UI icons (including expander chevrons).
    Our global font override would turn icons into visible text like "_arrow_downward_". */
 .material-icons,
