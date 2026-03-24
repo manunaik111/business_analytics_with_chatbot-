@@ -606,14 +606,14 @@ if dataset_loaded and not filtered_df.empty:
                 unsafe_allow_html=True)
 
     kpi_data = [
-        ("💰", "Total Sales",    fmt(kpis.get("total_sales",0),   pre="$"),          "Sales",                 "linear-gradient(90deg,#C084FC,#818CF8)"),
-        ("🛒", "Avg Order",      fmt(kpis.get("avg_order",0),     pre="$", dec=2),    "Sales",                 "linear-gradient(90deg,#38BDF8,#0EA5E9)"),
-        ("📈", "Total Profit",   fmt(kpis.get("total_profit",0),  pre="$"),           "Profit",                "linear-gradient(90deg,#86EFAC,#22C55E)"),
-        ("🎯", "Profit Margin",  fmt(kpis.get("profit_margin",0), suf="%", dec=1),    "Profit",                "linear-gradient(90deg,#FCD34D,#F59E0B)"),
-        ("📊", "Profit Ratio",   fmt(kpis.get("profit_ratio",0),  suf="%", dec=1),    "Profit",                "linear-gradient(90deg,#F9A8D4,#EC4899)"),
-        ("🏷️","Avg Discount",   fmt(kpis.get("avg_discount",0),  suf="%", dec=1),    "Discount",              "linear-gradient(90deg,#FCA5A5,#EF4444)"),
-        ("🚚", "Avg Shipping",   fmt(kpis.get("avg_shipping",0),  suf="d", dec=1),    "shipping_delay_days",   "linear-gradient(90deg,#6EE7B7,#10B981)"),
-        ("🧾", "Total Records",  fmt(kpis.get("total_records",0)),                    "Sales",                 "linear-gradient(90deg,#C4B5FD,#7C3AED)"),
+        ( "Total Sales",    fmt(kpis.get("total_sales",0),   pre="$"),          "Sales",                 "linear-gradient(90deg,#C084FC,#818CF8)"),
+        ( "Avg Order",      fmt(kpis.get("avg_order",0),     pre="$", dec=2),    "Sales",                 "linear-gradient(90deg,#38BDF8,#0EA5E9)"),
+        ( "Total Profit",   fmt(kpis.get("total_profit",0),  pre="$"),           "Profit",                "linear-gradient(90deg,#86EFAC,#22C55E)"),
+        ( "Profit Margin",  fmt(kpis.get("profit_margin",0), suf="%", dec=1),    "Profit",                "linear-gradient(90deg,#FCD34D,#F59E0B)"),
+        ( "Profit Ratio",   fmt(kpis.get("profit_ratio",0),  suf="%", dec=1),    "Profit",                "linear-gradient(90deg,#F9A8D4,#EC4899)"),
+        ("Avg Discount",   fmt(kpis.get("avg_discount",0),  suf="%", dec=1),    "Discount",              "linear-gradient(90deg,#FCA5A5,#EF4444)"),
+        ( "Avg Shipping",   fmt(kpis.get("avg_shipping",0),  suf="d", dec=1),    "shipping_delay_days",   "linear-gradient(90deg,#6EE7B7,#10B981)"),
+        ( "Total Records",  fmt(kpis.get("total_records",0)),                    "Sales",                 "linear-gradient(90deg,#C4B5FD,#7C3AED)"),
     ]
 
     cols = st.columns(8)
