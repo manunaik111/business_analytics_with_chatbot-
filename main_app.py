@@ -453,7 +453,10 @@ def load_data():
     df["Year"]     = df["Order Date"].dt.year
     df["Month"]    = df["Order Date"].dt.to_period("M")
     df["MonthStr"] = df["Month"].astype(str)
-    df = df.dropna(subset=["Sales","Profit","Category","Region"])
+    # Keep all original records; normalize missing filter dimensions to avoid UI issues.
+    for col in ["Category", "Region"]:
+        if col in df.columns:
+            df[col] = df[col].fillna("Unknown")
     return df
 
 try:
