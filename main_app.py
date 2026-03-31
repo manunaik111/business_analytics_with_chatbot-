@@ -16,6 +16,14 @@ sys.path.append(os.path.dirname(__file__))
 
 from chatbot.chatbot_engine import chat, clear_memory, initialize_memory, get_analyzer
 from report_generator import generate_excel_report, generate_pdf_report
+from auth import (
+    init_db, init_session, is_authenticated, current_user,
+    logout_user, can, show_login_page, show_user_management,
+    PERM_VIEW_DASHBOARD, PERM_VIEW_RAW_DATA, PERM_USE_CHATBOT,
+    PERM_DOWNLOAD_EXCEL, PERM_DOWNLOAD_PDF, PERM_MANAGE_USERS,
+    PERM_VIEW_AI_INSIGHTS, PERM_VIEW_ALL_CHARTS,
+    ROLE_COLORS
+)
 
 # ── Page Configuration ────────────────────────────────────────────────
 st.set_page_config(
@@ -29,6 +37,15 @@ st.set_page_config(
         'About': "AI Sales Analytics Dashboard"
     }
 )
+
+# Initialize DB and session
+init_db()
+init_session()
+
+# Gate: show login page if not authenticated
+if not is_authenticated():
+    show_login_page()
+    st.stop()
 
 float_init()
 initialize_memory()
@@ -573,6 +590,47 @@ if dataset_loaded:
 else:
     filtered_df = pd.DataFrame()
 
+with st.sidebar:
+    user = current_user()
+    role_color = ROLE_COLORS.get(user['role'], '#6B7280')
+
+    st.markdown(f"""
+    <div style="
+        background: rgba(18,18,40,0.8);
+        border-radius: 12px;
+        border: 1px solid rgba(123,47,190,0.25);
+        padding: 14px 16px;
+        margin-bottom: 16px;
+    ">
+        <div style="font-size:11px;color:#6B7280;text-transform:uppercase;
+                    letter-spacing:1px;margin-bottom:4px;">Logged in as</div>
+        <div style="font-size:14px;font-weight:700;color:#E0E0E0;">
+            {user['full_name']}
+        </div>
+        <div style="font-size:11px;color:#9CA3AF;margin-bottom:8px;">
+            {user['email']}
+        </div>
+        <span style="
+            background: {role_color}22;
+            color: {role_color};
+            border: 1px solid {role_color}55;
+            border-radius: 20px;
+            padding: 2px 10px;
+            font-size: 11px;
+            font-weight: 700;
+        ">{user['role']}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("Sign Out", key="logout_btn"):
+        logout_user()
+        st.rerun()
+
+    if can(PERM_MANAGE_USERS):
+        st.markdown("---")
+        if st.button("Manage Users", key="manage_users_btn"):
+            st.session_state.show_user_mgmt = True
+
 # Quick analysis in sidebar
 if not filtered_df.empty:
     st.sidebar.divider()
@@ -625,7 +683,7 @@ st.markdown("""
 st.markdown('<div class="glow-divider"></div>', unsafe_allow_html=True)
 
 # ── KPI Section ───────────────────────────────────────────────────────
-if dataset_loaded and not filtered_df.empty:
+if dataset_loaded and not filtered_df.empty and can(PERM_VIEW_DASHBOARD):
     kpis = compute_kpis(filtered_df)
 
     st.markdown('<div class="section-title">Key Performance Indicators</div>',
@@ -695,7 +753,7 @@ if dataset_loaded and not filtered_df.empty:
 st.markdown('<div class="glow-divider"></div>', unsafe_allow_html=True)
 
 # ── Charts Section ────────────────────────────────────────────────────
-if dataset_loaded and not filtered_df.empty:
+if dataset_loaded and not filtered_df.empty and can(PERM_VIEW_ALL_CHARTS):
     st.markdown('<div class="section-title">Sales and Profit Analysis</div>',
                 unsafe_allow_html=True)
 
@@ -812,7 +870,7 @@ if dataset_loaded and not filtered_df.empty:
 st.markdown('<div class="glow-divider"></div>', unsafe_allow_html=True)
 
 # ── AI Powered Insights ───────────────────────────────────────────────
-if dataset_loaded and not filtered_df.empty:
+if dataset_loaded and not filtered_df.empty and can(PERM_VIEW_AI_INSIGHTS):
     st.markdown('<div class="section-title">AI-Powered Insights</div>',
                 unsafe_allow_html=True)
     try:
@@ -874,7 +932,7 @@ if dataset_loaded and not filtered_df.empty:
 st.markdown('<div class="glow-divider"></div>', unsafe_allow_html=True)
 
 # ── View Detailed Data ────────────────────────────────────────────────
-if dataset_loaded and not filtered_df.empty:
+if dataset_loaded and not filtered_df.empty and can(PERM_VIEW_RAW_DATA):
     with st.expander("View Detailed Data", expanded=False):
         st.markdown(f"""
         <p style="color:#6B7280;font-size:13px;margin-bottom:10px;">
@@ -903,96 +961,113 @@ if dataset_loaded and not filtered_df.empty:
                 st.table(display_df.head(300))
             else:
                 raise
+else:
+    if dataset_loaded:
+        st.info("Raw data access is not available for your role.")
 
 st.markdown('<div class="glow-divider"></div>', unsafe_allow_html=True)
 
 # ── Report Downloads ──────────────────────────────────────────────────
-st.markdown('<div class="section-title">Download Reports</div>',
-            unsafe_allow_html=True)
-try:
-    analyzer_obj = get_analyzer()
-    dl1, dl2, dl3 = st.columns([1,1,2])
-    with dl1:
-        try:
-            excel_data = generate_excel_report(analyzer_obj)
-            st.download_button(
-                label="Download Excel Report",
-                data=excel_data,
-                file_name="sales_report.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        except Exception: st.warning("Excel report unavailable.")
-    with dl2:
-        try:
-            pdf_data = generate_pdf_report(analyzer_obj)
-            st.download_button(
-                label="Download PDF Report",
-                data=pdf_data,
-                file_name="sales_report.pdf",
-                mime="application/pdf"
-            )
-        except Exception: st.warning("PDF report unavailable.")
-except Exception as e:
-    st.error(f"Report error: {str(e)}")
+if can(PERM_DOWNLOAD_EXCEL) or can(PERM_DOWNLOAD_PDF):
+    st.markdown('<div class="section-title">Download Reports</div>',
+                unsafe_allow_html=True)
+    try:
+        analyzer_obj = get_analyzer()
+        dl1, dl2, dl3 = st.columns([1,1,2])
+        with dl1:
+            if can(PERM_DOWNLOAD_EXCEL):
+                try:
+                    excel_data = generate_excel_report(analyzer_obj)
+                    st.download_button(
+                        label="Download Excel Report",
+                        data=excel_data,
+                        file_name="sales_report.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                except Exception:
+                    st.warning("Excel report unavailable.")
+            else:
+                st.caption("Excel export not available for your role.")
+        with dl2:
+            if can(PERM_DOWNLOAD_PDF):
+                try:
+                    pdf_data = generate_pdf_report(analyzer_obj)
+                    st.download_button(
+                        label="Download PDF Report",
+                        data=pdf_data,
+                        file_name="sales_report.pdf",
+                        mime="application/pdf"
+                    )
+                except Exception:
+                    st.warning("PDF report unavailable.")
+            else:
+                st.caption("PDF export not available for your role.")
+    except Exception as e:
+        st.error(f"Report error: {str(e)}")
 
 st.markdown("<br><br>", unsafe_allow_html=True)
 
 # ── Floating Toggle Button ────────────────────────────────────────────
-button_container = st.container()
-with button_container:
-    btn_label = "Close Assistant" if st.session_state.chat_open else "AI Assistant"
-    if st.button(btn_label, key="float_toggle", type="primary"):
-        st.session_state.chat_open = not st.session_state.chat_open
-        st.rerun()
-button_container.float("bottom: 60px; right: 24px; width: auto;")
+if can(PERM_USE_CHATBOT):
+    button_container = st.container()
+    with button_container:
+        btn_label = "Close Assistant" if st.session_state.chat_open else "AI Assistant"
+        if st.button(btn_label, key="float_toggle", type="primary"):
+            st.session_state.chat_open = not st.session_state.chat_open
+            st.rerun()
+    button_container.float("bottom: 60px; right: 24px; width: auto;")
 
-# ── Floating Chat Panel ───────────────────────────────────────────────
-if st.session_state.chat_open:
-    chat_container = st.container()
-    with chat_container:
-        st.markdown('<div class="chat-header">AI Sales Assistant</div>',
-                    unsafe_allow_html=True)
+    # ── Floating Chat Panel ───────────────────────────────────────────────
+    if st.session_state.chat_open:
+        chat_container = st.container()
+        with chat_container:
+            st.markdown('<div class="chat-header">AI Sales Assistant</div>',
+                        unsafe_allow_html=True)
 
-        if not st.session_state.chat_messages:
-            st.markdown("""
-            <div class="msg-bot">
-                Hello. I am your AI Sales Assistant.<br>
-                Ask me anything about the sales data.
-            </div>""", unsafe_allow_html=True)
-        else:
-            for msg in st.session_state.chat_messages[-10:]:
-                css     = "msg-user" if msg['role']=='user' else "msg-bot"
-                content = msg['content'].replace('<','&lt;').replace('>','&gt;')
-                st.markdown(f'<div class="{css}">{content}</div>',
-                            unsafe_allow_html=True)
+            if not st.session_state.chat_messages:
+                st.markdown("""
+                <div class="msg-bot">
+                    Hello. I am your AI Sales Assistant.<br>
+                    Ask me anything about the sales data.
+                </div>""", unsafe_allow_html=True)
+            else:
+                for msg in st.session_state.chat_messages[-10:]:
+                    css     = "msg-user" if msg['role']=='user' else "msg-bot"
+                    content = msg['content'].replace('<','&lt;').replace('>','&gt;')
+                    st.markdown(f'<div class="{css}">{content}</div>',
+                                unsafe_allow_html=True)
 
-        st.markdown("&nbsp;")
-        st.markdown("**Quick Questions:**")
-        q1, q2 = st.columns(2)
-        with q1:
-            if st.button("Top Region",    key="qq1"):
-                st.session_state.pending_q = "Which region has the highest sales?"; st.rerun()
-            if st.button("Category",      key="qq2"):
-                st.session_state.pending_q = "Which category has highest profit?";  st.rerun()
-        with q2:
-            if st.button("Top Products",  key="qq3"):
-                st.session_state.pending_q = "What are the top 5 products?";        st.rerun()
-            if st.button("Monthly Trend", key="qq4"):
-                st.session_state.pending_q = "Show me the monthly sales trend";     st.rerun()
+            st.markdown("&nbsp;")
+            st.markdown("**Quick Questions:**")
+            q1, q2 = st.columns(2)
+            with q1:
+                if st.button("Top Region",    key="qq1"):
+                    st.session_state.pending_q = "Which region has the highest sales?"; st.rerun()
+                if st.button("Category",      key="qq2"):
+                    st.session_state.pending_q = "Which category has highest profit?";  st.rerun()
+            with q2:
+                if st.button("Top Products",  key="qq3"):
+                    st.session_state.pending_q = "What are the top 5 products?";        st.rerun()
+                if st.button("Monthly Trend", key="qq4"):
+                    st.session_state.pending_q = "Show me the monthly sales trend";     st.rerun()
 
-        user_input = st.chat_input("Ask about sales data...")
-        if user_input:
-            st.session_state.pending_q = user_input; st.rerun()
+            user_input = st.chat_input("Ask about sales data...")
+            if user_input:
+                st.session_state.pending_q = user_input; st.rerun()
 
-        if st.button("Clear Conversation", key="clear_btn", type="secondary"):
-            clear_memory(); st.rerun()
+            if st.button("Clear Conversation", key="clear_btn", type="secondary"):
+                clear_memory(); st.rerun()
 
-    chat_container.float(
-        "bottom: 120px; right: 24px; width: 360px; "
-        "background: rgba(10,10,22,0.92); border-radius: 18px; "
-        "box-shadow: 0 0 40px rgba(123,47,190,0.3); "
-        "border: 1px solid rgba(123,47,190,0.3); "
-        "padding: 0 14px 14px 14px; "
-        "max-height: 520px; overflow-y: auto; z-index: 999; "
-        "backdrop-filter: blur(20px);"
-    )
+        chat_container.float(
+            "bottom: 120px; right: 24px; width: 360px; "
+            "background: rgba(10,10,22,0.92); border-radius: 18px; "
+            "box-shadow: 0 0 40px rgba(123,47,190,0.3); "
+            "border: 1px solid rgba(123,47,190,0.3); "
+            "padding: 0 14px 14px 14px; "
+            "max-height: 520px; overflow-y: auto; z-index: 999; "
+            "backdrop-filter: blur(20px);"
+        )
+
+if st.session_state.get('show_user_mgmt') and can(PERM_MANAGE_USERS):
+    st.markdown("---")
+    show_user_management()
