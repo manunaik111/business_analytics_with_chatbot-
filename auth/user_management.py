@@ -139,7 +139,6 @@ def show_user_management():
 
     # ── Tab 2: Add New User ───────────────────────────────────────────
     with tab2:
-        st.markdown('<div class="um-section">', unsafe_allow_html=True)
         st.markdown("#### Create New User")
 
         n1, n2 = st.columns(2)
@@ -166,5 +165,3 @@ def show_user_management():
                     st.rerun()
                 else:
                     st.error(msg)
-
-        st.markdown('</div>', unsafe_allow_html=True)

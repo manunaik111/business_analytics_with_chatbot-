@@ -31,3 +31,4 @@ streamlit-float==0.3.5
 # Utilities
 python-dotenv==1.0.1
 requests==2.32.3
+bcrypt==4.2.0
