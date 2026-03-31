@@ -55,6 +55,23 @@ def show_user_management():
         padding: 12px 16px;
         margin-bottom: 8px;
     }
+    /* User management expander cards — subtle illuminated edges */
+    [data-testid="stExpander"] {
+        border: 1px solid rgba(123,47,190,0.26) !important;
+        box-shadow:
+            0 8px 24px rgba(0,0,0,0.35),
+            0 0 0 1px rgba(123,47,190,0.12) inset,
+            0 0 14px rgba(123,47,190,0.18) !important;
+        transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
+    }
+    [data-testid="stExpander"]:hover {
+        border-color: rgba(123,47,190,0.45) !important;
+        box-shadow:
+            0 10px 28px rgba(0,0,0,0.42),
+            0 0 18px rgba(123,47,190,0.24),
+            0 0 10px rgba(0,212,255,0.12) !important;
+        transform: translateY(-1px);
+    }
     </style>
     """, unsafe_allow_html=True)
 

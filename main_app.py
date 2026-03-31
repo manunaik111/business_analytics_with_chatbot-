@@ -257,6 +257,22 @@ div[data-baseweb="popover"] div[data-baseweb="menu"] li:hover {
     height: 1px;
     background: linear-gradient(90deg, rgba(123,47,190,0.6), transparent);
 }
+.fade-long-line {
+    width: 100%;
+    height: 1px;
+    margin: 18px 0 14px 0;
+    background: linear-gradient(
+        90deg,
+        rgba(123,47,190,0) 0%,
+        rgba(123,47,190,0.65) 20%,
+        rgba(0,212,255,0.55) 50%,
+        rgba(123,47,190,0.65) 80%,
+        rgba(123,47,190,0) 100%
+    );
+    box-shadow:
+        0 0 10px rgba(123,47,190,0.28),
+        0 0 24px rgba(0,212,255,0.12);
+}
 
 /* ── 6. Glassmorphism chart cards ── */
 .chart-card {
@@ -1069,5 +1085,5 @@ if can(PERM_USE_CHATBOT):
         )
 
 if st.session_state.get('show_user_mgmt') and can(PERM_MANAGE_USERS):
-    st.markdown("---")
+    st.markdown('<div class="fade-long-line"></div>', unsafe_allow_html=True)
     show_user_management()
