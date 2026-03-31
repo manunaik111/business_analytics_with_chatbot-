@@ -72,6 +72,25 @@ def show_user_management():
             0 0 10px rgba(0,212,255,0.12) !important;
         transform: translateY(-1px);
     }
+    /* Add-user panel styling */
+    div[data-testid="stForm"] {
+        background: rgba(12,12,28,0.82) !important;
+        border: 1px solid rgba(123,47,190,0.28) !important;
+        border-radius: 16px !important;
+        padding: 18px 18px 8px 18px !important;
+        box-shadow:
+            0 8px 28px rgba(0,0,0,0.38),
+            0 0 16px rgba(123,47,190,0.18),
+            inset 0 1px 0 rgba(255,255,255,0.03) !important;
+        transition: border-color 0.22s ease, box-shadow 0.22s ease;
+    }
+    div[data-testid="stForm"]:hover {
+        border-color: rgba(123,47,190,0.46) !important;
+        box-shadow:
+            0 10px 34px rgba(0,0,0,0.45),
+            0 0 22px rgba(123,47,190,0.25),
+            0 0 12px rgba(0,212,255,0.10) !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -156,21 +175,24 @@ def show_user_management():
 
     # ── Tab 2: Add New User ───────────────────────────────────────────
     with tab2:
-        st.markdown("#### Create New User")
+        with st.form("create_user_form", clear_on_submit=False):
+            st.markdown("#### Create New User")
 
-        n1, n2 = st.columns(2)
-        with n1:
-            new_name  = st.text_input("Full Name",      key="nu_name",  placeholder="John Doe")
-            new_email = st.text_input("Email Address",  key="nu_email", placeholder="john@company.com")
-        with n2:
-            new_pw1   = st.text_input("Password",       key="nu_pw1",   type="password", placeholder="Min 8 chars")
-            new_pw2   = st.text_input("Confirm Password", key="nu_pw2", type="password", placeholder="Repeat password")
+            n1, n2 = st.columns(2)
+            with n1:
+                new_name  = st.text_input("Full Name",      key="nu_name",  placeholder="John Doe")
+                new_email = st.text_input("Email Address",  key="nu_email", placeholder="john@company.com")
+            with n2:
+                new_pw1   = st.text_input("Password",       key="nu_pw1",   type="password", placeholder="Min 8 chars")
+                new_pw2   = st.text_input("Confirm Password", key="nu_pw2", type="password", placeholder="Repeat password")
 
-        new_role = st.selectbox("Assign Role", ALL_ROLES, key="nu_role")
-        st.caption(f"ℹ️ {ROLE_DESCRIPTIONS.get(new_role, '')}")
+            new_role = st.selectbox("Assign Role", ALL_ROLES, key="nu_role")
+            st.caption(f"ℹ️ {ROLE_DESCRIPTIONS.get(new_role, '')}")
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("Create User", key="create_user_btn", type="primary"):
+            st.markdown("<br>", unsafe_allow_html=True)
+            create_clicked = st.form_submit_button("Create User", type="primary")
+
+        if create_clicked:
             if not all([new_name, new_email, new_pw1, new_pw2]):
                 st.error("All fields are required.")
             elif new_pw1 != new_pw2:
