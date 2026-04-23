@@ -13,7 +13,6 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false
-    disk:
-      name: uploads
-      mountPath: /opt/render/project/src/data/uploads
-      sizeGB: 1
+    # Persistent disk requires paid plan on Render.
+    # Uploads are stored in-memory per session (ephemeral).
+    # See upload_store.py — files persist for the lifetime of the instance.
