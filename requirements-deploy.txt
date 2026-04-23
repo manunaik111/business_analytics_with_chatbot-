@@ -1,7 +1,5 @@
 # ══════════════════════════════════════════════════════════════════════
-# Zero Click AI — Deployment Requirements (cloud-safe)
-# pyaudio removed — uses browser Web Speech API instead
-# streamlit/streamlit-float removed — FastAPI is the deployment target
+# Zero Click AI — Deployment Requirements (verified against codebase)
 # ══════════════════════════════════════════════════════════════════════
 
 # ── Web Framework ─────────────────────────────────────────────────────
@@ -14,7 +12,7 @@ pydantic==2.10.3
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
-werkzeug==3.1.3
+werkzeug==3.1.3          # used in email_scheduler/db_manager.py
 
 # ── Data Processing ───────────────────────────────────────────────────
 pandas==2.2.3
@@ -30,24 +28,24 @@ joblib==1.4.2
 
 # ── AI / LLM ─────────────────────────────────────────────────────────
 groq==0.13.1
-langchain==0.3.9
-langchain-groq==0.2.3
-langchain-community==0.3.9
+# langchain removed — not imported by api.py or any module it calls
 
 # ── NLP ───────────────────────────────────────────────────────────────
 nltk==3.9.1
 spacy==3.8.2
+thefuzz==0.22.1          # used in nlp/entity_extractor.py (was missing!)
+python-Levenshtein==0.25.1  # speeds up thefuzz
 
-# ── Voice (no pyaudio — browser handles mic, gTTS handles output) ─────
+# ── Voice ─────────────────────────────────────────────────────────────
 SpeechRecognition==3.11.0
 gTTS==2.5.3
-pydub==0.25.1
-# pyaudio intentionally excluded — requires C build tools not on free cloud
+# pydub removed — not imported anywhere in the codebase
+# pyaudio removed — not imported anywhere in the codebase
 
 # ── Visualisation ─────────────────────────────────────────────────────
-matplotlib==3.9.3
-seaborn==0.13.2
-plotly==5.24.1
+matplotlib==3.9.3        # used in report_generator.py
+plotly==5.24.1           # used in dashboard/utils.py (imported by kpi_generator)
+seaborn==0.13.2          # used in data_management/ (try/except protected)
 
 # ── Report Generation ─────────────────────────────────────────────────
 reportlab==4.2.5
@@ -65,4 +63,3 @@ requests==2.32.3
 # ── Utilities ─────────────────────────────────────────────────────────
 python-dateutil==2.9.0
 pytz==2024.2
-tqdm==4.67.1
