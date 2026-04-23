@@ -1,0 +1,6 @@
+pandas==2.1.4              [Data loading and analysis]
+numpy==1.26.4              [Numerical calculations]   
+streamlit==1.32.2          [Creating the dashboard interface]
+plotly==5.19.0             [Interactive charts]
+matplotlib==3.8.2          [Basic chart plotting]
+seaborn==0.13.2            [Statistical visualizations]

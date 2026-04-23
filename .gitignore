@@ -1,0 +1,47 @@
+# ── Secrets — NEVER upload these ──
+.streamlit/secrets.toml
+
+# ── Virtual Environment ──
+venv/
+env/
+.env
+
+# ── Python cache ──
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# ── Distribution / Build ──
+build/
+dist/
+*.egg-info/
+
+# ── Jupyter ──
+.ipynb_checkpoints/
+*.ipynb
+
+# ── OS files ──
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── VS Code ──
+.vscode/
+*.code-workspace
+
+# ── Logs ──
+*.log
+logs/
+
+# ── Output files ──
+output.json
+*.tmp
+
+# ── Data — optional, comment out if you want to push the CSV ──
+# data/SALES_DATA_SETT.csv
+data/uploads/*
+!data/uploads/.gitkeep
+data/_active_upload.pkl
+data/_active_upload_meta.json

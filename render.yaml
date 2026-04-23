@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: zero-click-ai
+    runtime: python
+    buildCommand: |
+      pip install -r requirements-deploy.txt
+      python -m spacy download en_core_web_sm
+    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+    disk:
+      name: uploads
+      mountPath: /opt/render/project/src/data/uploads
+      sizeGB: 1

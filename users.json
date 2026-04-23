@@ -1,0 +1,30 @@
+{
+  "admin@sales.com": {
+    "name": "Sales Admin",
+    "password": "$2b$12$yRRxPtLK9Fv/cl/GkzUTXeasaVi5L4CDI4fi.B3dlhNR5UwHOD8gy",
+    "role": "Admin",
+    "created_at": "2026-04-22T07:06:32.954011",
+    "active": true
+  },
+  "manupnaik639@gmail.com": {
+    "name": "Manu Naik",
+    "password": "$2b$12$Q8iwHgs96UcMsuo1KSUrYOvj0slsgeGcokOzz1TKuDO28W10CFMle",
+    "role": "Admin",
+    "created_at": "2026-04-22T07:24:22.715299",
+    "active": true
+  },
+  "team2_9f0e0699@example.com": {
+    "name": "Team Two Test",
+    "password": "$2b$12$I4whbsiyUvdxLviYNQXKR.HXe8zO0BFmRNqeFd7H4QB/TuHzo.faa",
+    "role": "Viewer",
+    "created_at": "2026-04-22T14:38:55.848630",
+    "active": true
+  },
+  "team2_9579a86e@example.com": {
+    "name": "Team Two Test",
+    "password": "$2b$12$E5hoaPBIUp4ZcpE8hk1utOY6KYoZpVZH5lB.f97k9VkCtZig6HygW",
+    "role": "Viewer",
+    "created_at": "2026-04-22T14:39:14.076961",
+    "active": true
+  }
+}
