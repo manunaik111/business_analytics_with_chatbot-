@@ -1,8 +1,7 @@
 """
-reports/pdf_generator.py
-FR 5.3 - Steps 28-29: PDF report generation via ReportLab (Team 4 module).
-
-Generates polished PDF reports from the latest dashboard/insights data.
+email_scheduler/pdf_generator.py
+Generates the scheduled email PDF using the same real report_generator.py
+that powers the dashboard download button — same charts, same KPIs, same data.
 """
 
 import os
@@ -10,13 +9,13 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
+
 logger = logging.getLogger(__name__)
 
 REPORT_OUTPUT_DIR = Path("reports/output")
 REPORT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-
-# ── Report Type Registry ────────────────────────────────────────────────────────
 REPORT_TYPES = {
     "summary":     "Executive Summary Report",
     "insights":    "Data Insights Report",
@@ -28,231 +27,187 @@ REPORT_TYPES = {
 
 class PDFReportGenerator:
     """
-    Generates PDF reports using ReportLab.
-    Interfaces with Team 4 Visualization module for chart data.
+    Generates PDF reports for scheduled email delivery.
+    Uses the same generate_report_pdf() as the dashboard download button
+    so the emailed report is identical to what users can download manually.
     """
 
-    def generate(self, report_type: str, schedule_id: int = None) -> str:
+    def generate(self, report_type: str, schedule_id: int = None,
+                 df: pd.DataFrame = None) -> str:
         """
         Generate a PDF report and return the file path.
 
         Args:
             report_type:  One of REPORT_TYPES keys
             schedule_id:  Associated schedule ID (for filename)
+            df:           The active dataset DataFrame. If None, loads the
+                          default CSV so the report always has real data.
 
         Returns:
             Absolute path to the generated PDF file
         """
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import mm
-        from reportlab.lib import colors
-        from reportlab.platypus import (
-            SimpleDocTemplate, Paragraph, Spacer, Table,
-            TableStyle, HRFlowable, KeepTogether
-        )
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-
-        title = REPORT_TYPES.get(report_type, "Analytics Report")
         timestamp = datetime.utcnow()
-        filename = f"report_{report_type}_{timestamp.strftime('%Y%m%d_%H%M%S')}.pdf"
+        filename  = f"report_{report_type}_{timestamp.strftime('%Y%m%d_%H%M%S')}.pdf"
         output_path = REPORT_OUTPUT_DIR / filename
 
-        doc = SimpleDocTemplate(
-            str(output_path),
-            pagesize=A4,
-            rightMargin=20*mm,
-            leftMargin=20*mm,
-            topMargin=25*mm,
-            bottomMargin=20*mm,
-        )
+        # ── Load dataset ──────────────────────────────────────────────────
+        if df is None or df.empty:
+            df = self._load_default_df()
 
-        styles = getSampleStyleSheet()
-        brand_color = colors.HexColor("#1a1a2e")
-        accent_color = colors.HexColor("#e94560")
-        light_bg = colors.HexColor("#f4f6fb")
+        # ── Build report inputs (same as api.py _prepare_report_inputs) ──
+        try:
+            from report_generator import generate_report_pdf
+            kpis, ml_results, forecast_data, insights, charts = \
+                self._prepare_inputs(df)
 
-        # Custom styles
-        title_style = ParagraphStyle(
-            "ReportTitle",
-            parent=styles["Title"],
-            fontSize=22,
-            textColor=brand_color,
-            spaceAfter=4,
-            fontName="Helvetica-Bold",
-        )
-        subtitle_style = ParagraphStyle(
-            "Subtitle",
-            parent=styles["Normal"],
-            fontSize=10,
-            textColor=colors.HexColor("#666677"),
-            spaceAfter=2,
-        )
-        section_style = ParagraphStyle(
-            "SectionHead",
-            parent=styles["Heading2"],
-            fontSize=13,
-            textColor=brand_color,
-            fontName="Helvetica-Bold",
-            spaceBefore=14,
-            spaceAfter=6,
-            borderPad=4,
-        )
-        body_style = ParagraphStyle(
-            "Body",
-            parent=styles["Normal"],
-            fontSize=9.5,
-            leading=15,
-            textColor=colors.HexColor("#333344"),
-        )
-        kpi_label_style = ParagraphStyle(
-            "KPILabel",
-            parent=styles["Normal"],
-            fontSize=8,
-            textColor=colors.HexColor("#999aaa"),
-            fontName="Helvetica",
-            alignment=TA_CENTER,
-        )
-        kpi_value_style = ParagraphStyle(
-            "KPIValue",
-            parent=styles["Normal"],
-            fontSize=20,
-            textColor=brand_color,
-            fontName="Helvetica-Bold",
-            alignment=TA_CENTER,
-        )
-
-        story = []
-
-        # ── Cover / Header ──────────────────────────────────────────────────
-        story.append(Spacer(1, 8*mm))
-        story.append(Paragraph(title, title_style))
-        story.append(Paragraph(
-            f"Generated: {timestamp.strftime('%B %d, %Y at %H:%M UTC')}  |  "
-            f"Schedule ID: {schedule_id or 'N/A'}  |  Type: {report_type.upper()}",
-            subtitle_style
-        ))
-        story.append(HRFlowable(
-            width="100%", thickness=2, color=accent_color, spaceAfter=10
-        ))
-
-        # ── KPI Summary Cards ───────────────────────────────────────────────
-        story.append(Paragraph("Key Performance Indicators", section_style))
-
-        kpi_data = self._fetch_kpi_data(report_type)
-        kpi_table_data = []
-        row_labels = []
-        row_values = []
-        for kpi in kpi_data:
-            row_labels.append(Paragraph(kpi["label"], kpi_label_style))
-            row_values.append(Paragraph(kpi["value"], kpi_value_style))
-
-        kpi_table = Table(
-            [row_labels, row_values],
-            colWidths=[38*mm] * len(kpi_data),
-            rowHeights=[12*mm, 16*mm],
-        )
-        kpi_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), light_bg),
-            ("ROUNDEDCORNERS", [4]),
-            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#dde0ee")),
-            ("LINEAFTER", (0, 0), (-2, -1), 0.5, colors.HexColor("#dde0ee")),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ]))
-        story.append(kpi_table)
-        story.append(Spacer(1, 6*mm))
-
-        # ── Data Table Section ──────────────────────────────────────────────
-        story.append(Paragraph("Detailed Metrics", section_style))
-        story.append(Paragraph(
-            "The following table presents aggregated metrics from the reporting period.",
-            body_style
-        ))
-        story.append(Spacer(1, 3*mm))
-
-        table_data = self._fetch_table_data(report_type)
-        if table_data:
-            header = table_data[0]
-            rows = table_data[1:]
-
-            styled_header = [
-                Paragraph(f"<b>{cell}</b>", ParagraphStyle(
-                    "TH", parent=styles["Normal"], fontSize=9,
-                    textColor=colors.white, fontName="Helvetica-Bold", alignment=TA_CENTER
-                )) for cell in header
-            ]
-            col_w = (170*mm) / len(header)
-
-            t = Table(
-                [styled_header] + rows,
-                colWidths=[col_w] * len(header),
-                repeatRows=1,
+            pdf_bytes = generate_report_pdf(
+                df, kpis, ml_results, forecast_data, insights, charts
             )
-            t.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), brand_color),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, light_bg]),
-                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#dde0ee")),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("ALIGN", (1, 1), (-1, -1), "CENTER"),
-            ]))
-            story.append(t)
 
-        story.append(Spacer(1, 6*mm))
+            with open(output_path, "wb") as f:
+                f.write(pdf_bytes)
 
-        # ── Insights Section ────────────────────────────────────────────────
-        story.append(Paragraph("Automated Insights", section_style))
-        for insight in self._generate_insights(report_type):
-            story.append(Paragraph(f"• {insight}", body_style))
-            story.append(Spacer(1, 2*mm))
+            logger.info(f"PDF generated using real data: {output_path}")
+            return str(output_path)
 
-        # ── Footer ──────────────────────────────────────────────────────────
-        story.append(Spacer(1, 10*mm))
-        story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#ccccdd")))
-        story.append(Spacer(1, 2*mm))
-        story.append(Paragraph(
-            f"<font color='#999aaa' size='8'>This report was automatically generated by the "
-            f"Email Report Scheduler system on {timestamp.strftime('%Y-%m-%d %H:%M:%S')} UTC. "
-            f"Confidential — for internal use only.</font>",
-            ParagraphStyle("Footer", parent=styles["Normal"], fontSize=8, alignment=TA_CENTER)
-        ))
+        except Exception as e:
+            logger.exception(f"Real report generation failed, using fallback: {e}")
+            return self._generate_fallback(report_type, schedule_id, output_path)
 
-        doc.build(story)
-        logger.info(f"PDF generated: {output_path}")
-        return str(output_path)
+    # ── Helpers ───────────────────────────────────────────────────────────────
 
-    # ── Data Fetch Stubs (replace with real datasource) ──────────────────────
-    def _fetch_kpi_data(self, report_type: str) -> list:
-        """Fetch KPIs from dashboard/insights data (Team 4 integration point)."""
-        return [
-            {"label": "Total Users",      "value": "12,847"},
-            {"label": "Active Sessions",  "value": "3,291"},
-            {"label": "Conversion Rate",  "value": "4.7%"},
-            {"label": "Delivery Rate",    "value": "97.2%"},
-        ]
+    def _load_default_df(self) -> pd.DataFrame:
+        """Load the default sales CSV as a fallback data source."""
+        csv_path = os.path.join(
+            os.path.dirname(__file__), '..', 'data', 'SALES_DATA_SETT.csv'
+        )
+        try:
+            df = pd.read_csv(csv_path, encoding='utf-8-sig')
+            df["Order Date"] = pd.to_datetime(df["Order Date"], dayfirst=True, errors="coerce")
+            df["Ship Date"]  = pd.to_datetime(df["Ship Date"],  dayfirst=True, errors="coerce")
+            if "shipping_delay_days" not in df.columns:
+                df["shipping_delay_days"] = (
+                    df["Ship Date"] - df["Order Date"]
+                ).dt.days.fillna(0)
+            return df
+        except Exception as e:
+            logger.warning(f"Could not load default CSV: {e}")
+            return pd.DataFrame()
 
-    def _fetch_table_data(self, report_type: str) -> list:
-        """Fetch tabular data from the database (Team 4 integration point)."""
-        return [
-            ["Metric", "Previous Period", "Current Period", "Change", "Status"],
-            ["Page Views",    "45,231", "51,880", "+14.7%", "↑ Up"],
-            ["Unique Visits", "12,100", "13,450", "+11.2%", "↑ Up"],
-            ["Bounce Rate",   "38.4%",  "35.1%",  "−3.3%",  "↑ Better"],
-            ["Avg. Duration", "2m 14s", "2m 47s", "+24.4%", "↑ Up"],
-            ["Conversions",   "562",    "611",    "+8.7%",  "↑ Up"],
-            ["Revenue",       "$9,840", "$11,230", "+14.1%","↑ Up"],
-        ]
+    def _prepare_inputs(self, df: pd.DataFrame):
+        """
+        Mirror api.py's _prepare_report_inputs() so the email PDF
+        is built with the exact same logic as the download button.
+        """
+        import sys, os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-    def _generate_insights(self, report_type: str) -> list:
-        """Auto-generate textual insights (Team 4 integration point)."""
-        return [
-            "Unique visitor count grew 11.2% compared to the previous reporting period.",
-            "Bounce rate improvement of 3.3 percentage points indicates higher content engagement.",
-            "Revenue increased by 14.1%, exceeding the 10% quarterly growth target.",
-            "Email delivery success rate stands at 97.2%, surpassing the 95% SLA target.",
-            "Average session duration increased, suggesting improved user experience.",
-        ]
+        from dashboard.data_analysis import get_column_types
+        from dashboard.kpi_generator import generate_kpis
+
+        col_types = get_column_types(df)
+        raw_kpis  = generate_kpis(df, col_types)
+        # generate_kpis returns list of tuples (label, value, sub)
+        kpis = raw_kpis if raw_kpis else []
+
+        # Forecast — only for sales datasets
+        forecast_data = None
+        try:
+            from analytics.predictive_engine import SalesPredictiveEngine
+            if "Sales" in df.columns and "Order Date" in df.columns:
+                engine = SalesPredictiveEngine(df=df.copy())
+                import contextlib, io as _io
+                with contextlib.redirect_stdout(_io.StringIO()):
+                    raw = engine.run_full_forecast()
+                linear = raw.get("linear_forecast", pd.DataFrame())
+                if isinstance(linear, pd.DataFrame) and not linear.empty:
+                    report_df = linear.reset_index().rename(columns={
+                        "Period": "ds",
+                        "Predicted Sales": "yhat",
+                        "Lower Bound (95%)": "yhat_lower",
+                        "Upper Bound (95%)": "yhat_upper",
+                    })
+                    forecast_data = {
+                        "model": "Linear trend + seasonal adjustment",
+                        "forecast_df": report_df,
+                    }
+        except Exception:
+            forecast_data = None
+
+        # Insights
+        insights_list = self._build_insights(df)
+        insights = "\n".join(insights_list) if insights_list else "No insights available."
+
+        # Charts dict (report_generator builds its own from df, but pass anyway)
+        charts = {}
+
+        return kpis, None, forecast_data, insights, charts
+
+    def _build_insights(self, df: pd.DataFrame) -> list:
+        """Generate insights from the dataset."""
+        try:
+            from analytics.insights import generate_ai_insights
+            if "Sales" in df.columns:
+                kpis_dict = {
+                    "total_sales":    float(df["Sales"].sum()),
+                    "total_profit":   float(df["Profit"].sum()) if "Profit" in df.columns else 0,
+                    "total_orders":   int(df["Order ID"].nunique()) if "Order ID" in df.columns else len(df),
+                    "total_quantity": int(df["Quantity"].sum()) if "Quantity" in df.columns else 0,
+                    "unique_customers": int(df["Customer ID"].nunique()) if "Customer ID" in df.columns else 0,
+                    "avg_order_value": float(df["Sales"].sum()) / max(1, int(df["Order ID"].nunique()) if "Order ID" in df.columns else len(df)),
+                    "avg_discount":   float(df["Discount"].mean()) if "Discount" in df.columns else 0,
+                    "avg_shipping_delay": float(df["shipping_delay_days"].mean()) if "shipping_delay_days" in df.columns else 0,
+                }
+                return generate_ai_insights(kpis_dict)
+        except Exception:
+            pass
+
+        # Generic fallback
+        insights = [f"Dataset contains {len(df):,} rows and {len(df.columns)} columns."]
+        num_cols = df.select_dtypes(include="number").columns.tolist()
+        for col in num_cols[:3]:
+            try:
+                insights.append(
+                    f"{col}: total={df[col].sum():,.2f}, avg={df[col].mean():,.2f}"
+                )
+            except Exception:
+                pass
+        return insights
+
+    def _generate_fallback(self, report_type: str, schedule_id,
+                           output_path: Path) -> str:
+        """
+        Minimal ReportLab fallback if the main generator fails entirely.
+        Still better than fake data — shows an error notice.
+        """
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+            from reportlab.lib.styles import getSampleStyleSheet
+
+            doc    = SimpleDocTemplate(str(output_path), pagesize=A4)
+            styles = getSampleStyleSheet()
+            story  = [
+                Paragraph("Zero Click AI — Scheduled Report", styles["Title"]),
+                Spacer(1, 20),
+                Paragraph(
+                    f"Report Type: {REPORT_TYPES.get(report_type, report_type)}",
+                    styles["Normal"]
+                ),
+                Spacer(1, 10),
+                Paragraph(
+                    f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
+                    styles["Normal"]
+                ),
+                Spacer(1, 20),
+                Paragraph(
+                    "The full report could not be generated at this time. "
+                    "Please log in to the dashboard to download the report manually.",
+                    styles["Normal"]
+                ),
+            ]
+            doc.build(story)
+            return str(output_path)
+        except Exception as e:
+            logger.error(f"Fallback PDF also failed: {e}")
+            return str(output_path)

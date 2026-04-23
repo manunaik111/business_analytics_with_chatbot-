@@ -1750,8 +1750,9 @@ def create_schedule(
             report_type=req.report_type,
             recipients=[req.recipient_email]
         )
-        # Send first report immediately and return outcome to the UI.
-        trigger_result = _scheduler.trigger_now(sid)
+        # Send first report immediately using the user's active dataset
+        user_df = _get_df(_user)
+        trigger_result = _scheduler.trigger_now(sid, df=user_df)
         if trigger_result.get("success"):
             return {
                 "message": f"Schedule #{sid} created. First report sent to {req.recipient_email}.",
@@ -1796,7 +1797,7 @@ def send_now(
             "created_by":    _user.get("sub","")
         }
         sid = _email_db.save_schedule(schedule_data)
-        trigger_result = _scheduler.trigger_now(sid)
+        trigger_result = _scheduler.trigger_now(sid, df=_get_df(_user))
         _email_db.delete_schedule(sid)
         if trigger_result.get("success"):
             return {"message": f"Report sent to {req.recipient_email}.", "trigger": trigger_result}

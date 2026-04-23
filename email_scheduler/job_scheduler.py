@@ -96,17 +96,20 @@ class ReportScheduler:
             self._scheduler.remove_job(job_id)
             logger.info(f"Removed job {job_id}")
 
-    def trigger_now(self, schedule_id: int) -> dict:
-        """Immediately execute a scheduled job (manual trigger)."""
+    def trigger_now(self, schedule_id: int, df=None) -> dict:
+        """Immediately execute a scheduled job (manual trigger).
+        df: active user DataFrame to include in the report.
+        """
         schedule = self.db.get_schedule(schedule_id)
         if not schedule:
             return {"success": False, "error": "Schedule not found"}
 
         try:
-            result = self._execute_report_job(
+            self._execute_report_job(
                 schedule_id,
                 schedule["report_type"],
-                schedule["recipients"]
+                schedule["recipients"],
+                df=df
             )
             return {"success": True, "message": f"Report sent to {len(schedule['recipients'])} recipient(s)"}
         except Exception as exc:
@@ -131,16 +134,11 @@ class ReportScheduler:
         return jobs
 
     # ── Core Execution (Steps 28-32) ───────────────────────────────────────────
-    def _execute_report_job(self, schedule_id: int, report_type: str, recipients: list):
+    def _execute_report_job(self, schedule_id: int, report_type: str,
+                            recipients: list, df=None):
         """
         Core job: generate PDF → send email → log outcome.
-
-        Steps:
-          28. Triggered at scheduled time
-          29. PDF report compiled with latest data
-          30. Email composed with PDF attachment
-          31. SMTP client sends email
-          32. Execution logged with status and timestamp
+        df: the user's active DataFrame (passed from trigger_now / add_schedule).
         """
         from email_scheduler.pdf_generator import PDFReportGenerator
         from email_scheduler.smtp_client import EmailClient
@@ -155,8 +153,12 @@ class ReportScheduler:
         try:
             logger.info(f"[Job] Starting report job for schedule {schedule_id} — type={report_type}")
 
-            # Step 29: Generate PDF report
-            pdf_path = pdf_gen.generate(report_type=report_type, schedule_id=schedule_id)
+            # Step 29: Generate PDF report using real dataset
+            pdf_path = pdf_gen.generate(
+                report_type=report_type,
+                schedule_id=schedule_id,
+                df=df  # passes real DataFrame; falls back to default CSV if None
+            )
             logger.info(f"[Job] PDF generated: {pdf_path}")
 
             # Steps 30-31: Compose and send email
