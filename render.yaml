@@ -2,8 +2,11 @@ services:
   - type: web
     name: zero-click-ai
     runtime: python
-    buildCommand: |
-      pip install -r requirements-deploy.txt
+    pythonVersion: "3.11.9"
+    buildCommand: >-
+      pip install --upgrade pip &&
+      pip install --only-binary=:all: numpy==1.26.4 scipy==1.13.1 pandas==2.2.3 scikit-learn==1.5.2 &&
+      pip install -r requirements-deploy.txt &&
       python -m spacy download en_core_web_sm
     startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
     envVars:
@@ -13,6 +16,3 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false
-    # Persistent disk requires paid plan on Render.
-    # Uploads are stored in-memory per session (ephemeral).
-    # See upload_store.py — files persist for the lifetime of the instance.
