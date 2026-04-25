@@ -1287,7 +1287,13 @@ async def stream(
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 11. CHATBOT — Groq AI (llama-3.3-70b-versatile) with NLP context
+# 11. CHATBOT — Groq AI with Text-to-Pandas (Option 1)
+#
+# Flow:
+#   1. Groq receives column schema + question → writes a pandas expression
+#   2. We execute it safely against the real DataFrame
+#   3. Groq receives the actual result → answers naturally
+#   4. Fallback to summary-based answer if code generation/execution fails
 # ═════════════════════════════════════════════════════════════════════════════
 
 GROQ_CHAT_MODEL = "llama-3.3-70b-versatile"
@@ -1296,7 +1302,7 @@ HAS_GROQ = False
 
 
 def _get_groq_client():
-    """Lazy-init Groq client so it always reads the key after dotenv is loaded."""
+    """Lazy-init Groq client — reads key after dotenv is loaded."""
     global _groq_client, HAS_GROQ
     if _groq_client is not None:
         return _groq_client
@@ -1312,90 +1318,178 @@ def _get_groq_client():
         return None
 
 
-def _build_chat_system_prompt(df: Optional[pd.DataFrame], meta: dict) -> str:
-    """Build a rich system prompt from the active dataset so Groq can answer accurately."""
-    if df is None or df.empty:
-        return (
-            "You are a friendly AI Dataset Assistant. "
-            "No dataset is currently loaded — politely ask the user to upload one."
-        )
+# ── Safe pandas execution sandbox ────────────────────────────────────────────
 
-    rows      = len(df)
-    cols      = df.columns.tolist()
-    num_cols  = df.select_dtypes(include="number").columns.tolist()
-    cat_cols  = df.select_dtypes(include=["object", "category"]).columns.tolist()
-    ds_name   = meta.get("filename") or meta.get("datasetName") or meta.get("uploaded_file") or "the uploaded dataset"
-    is_sales  = _is_sales_compatible(df)
+# Blocked keywords — prevent any dangerous operations
+_BLOCKED = [
+    "import", "exec", "eval", "open", "os.", "sys.", "subprocess",
+    "__", "globals", "locals", "getattr", "setattr", "delattr",
+    "compile", "input", "print", "write", "delete", "drop",
+    "to_csv", "to_excel", "to_sql", "to_json", "to_pickle",
+]
 
-    # Build a compact data summary
-    summary_lines = [
-        f"Dataset: {ds_name}",
-        f"Rows: {rows:,}  |  Columns ({len(cols)}): {', '.join(cols[:20])}{'...' if len(cols) > 20 else ''}",
+def _safe_execute(code: str, df: pd.DataFrame) -> tuple[bool, str]:
+    """
+    Execute a pandas expression safely.
+    Returns (success: bool, result_string: str)
+    """
+    code = code.strip()
+
+    # Strip markdown code fences if Groq wrapped the code
+    if code.startswith("```"):
+        lines = code.split("\n")
+        code = "\n".join(
+            l for l in lines
+            if not l.strip().startswith("```")
+        ).strip()
+
+    # Block dangerous patterns
+    code_lower = code.lower()
+    for blocked in _BLOCKED:
+        if blocked in code_lower:
+            return False, f"Blocked: unsafe operation '{blocked}' detected."
+
+    # Only allow single-expression code (no multi-line assignments or loops)
+    lines = [l.strip() for l in code.split("\n") if l.strip() and not l.strip().startswith("#")]
+    if len(lines) > 5:
+        return False, "Blocked: too many lines."
+
+    try:
+        # Provide a safe namespace with only df and pandas
+        namespace = {
+            "df": df.copy(),
+            "pd": pd,
+            "np": np,
+        }
+        result = eval(compile(code, "<string>", "eval"), {"__builtins__": {}}, namespace)
+
+        # Format the result into a readable string
+        if isinstance(result, pd.DataFrame):
+            if result.empty:
+                return True, "No rows matched that query."
+            # Cap at 20 rows to avoid token overflow
+            preview = result.head(20)
+            return True, preview.to_string(index=True)
+        elif isinstance(result, pd.Series):
+            if result.empty:
+                return True, "No data matched that query."
+            preview = result.head(20)
+            return True, preview.to_string()
+        elif isinstance(result, (int, float, np.integer, np.floating)):
+            return True, f"{result:,.4f}".rstrip("0").rstrip(".")
+        else:
+            return True, str(result)[:2000]
+
+    except Exception as e:
+        return False, f"Execution error: {e}"
+
+
+def _build_schema_prompt(df: pd.DataFrame) -> str:
+    """Build a compact schema description for the code-generation prompt."""
+    lines = ["DataFrame variable name: df"]
+    lines.append(f"Shape: {len(df):,} rows × {len(df.columns)} columns")
+    lines.append("")
+    lines.append("Columns (name | dtype | sample values):")
+    for col in df.columns:
+        dtype = str(df[col].dtype)
+        try:
+            if pd.api.types.is_numeric_dtype(df[col]):
+                sample = f"min={df[col].min():,.2f}, max={df[col].max():,.2f}, mean={df[col].mean():,.2f}"
+            else:
+                top = df[col].dropna().value_counts().head(4).index.tolist()
+                sample = ", ".join(str(v) for v in top)
+        except Exception:
+            sample = "N/A"
+        lines.append(f"  - {col} ({dtype}): {sample}")
+    return "\n".join(lines)
+
+
+def _build_code_gen_prompt(df: pd.DataFrame, question: str) -> list[dict]:
+    """Build the messages list for Groq to generate pandas code."""
+    schema = _build_schema_prompt(df)
+    system = f"""You are a pandas code generator. Given a DataFrame schema and a user question, write a single pandas expression that answers the question.
+
+RULES:
+- Output ONLY the pandas expression, nothing else — no explanation, no markdown, no comments
+- Use the variable name: df
+- The expression must be evaluable with eval()
+- For aggregations use: df.groupby(...)[...].sum() / .mean() / .count() etc.
+- For filtering use: df[df[...] == ...]
+- For sorting use: df.sort_values(...)
+- For top N use: df.nlargest(N, column)
+- For counts use: df[column].value_counts()
+- For statistics use: df[column].describe() or df[column].std() etc.
+- Column names are case-sensitive — use exact names from the schema
+- If the question cannot be answered with pandas, output exactly: CANNOT_ANSWER
+
+DATAFRAME SCHEMA:
+{schema}"""
+
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": question},
     ]
 
-    # Numeric column stats
-    for col in num_cols[:8]:
-        try:
-            total = df[col].sum()
-            avg   = df[col].mean()
-            summary_lines.append(f"  {col}: total={total:,.2f}, avg={avg:,.2f}, min={df[col].min():,.2f}, max={df[col].max():,.2f}")
-        except Exception:
-            pass
 
-    # Top values for key categorical columns
-    for col in cat_cols[:4]:
-        try:
-            top = df[col].value_counts().head(5)
-            summary_lines.append(f"  {col} top values: {', '.join(str(v) for v in top.index.tolist())}")
-        except Exception:
-            pass
+def _build_answer_prompt(df: Optional[pd.DataFrame], meta: dict,
+                          question: str, query_result: Optional[str]) -> list[dict]:
+    """Build the messages list for Groq to answer naturally using the query result."""
+    is_sales = _is_sales_compatible(df) if df is not None else False
+    persona  = "AI Sales Assistant" if is_sales else "AI Dataset Assistant"
+    ds_name  = (meta.get("filename") or meta.get("datasetName") or
+                meta.get("uploaded_file") or "the dataset")
 
-    # Sales-specific enrichment
-    if is_sales:
-        try:
-            kpis = _build_kpis_dict(df)
-            summary_lines += [
-                f"Total Sales: ${kpis['total_sales']:,.0f}",
-                f"Total Profit: ${kpis['total_profit']:,.0f}",
-                f"Total Orders: {kpis['total_orders']:,}",
-                f"Avg Order Value: ${kpis['avg_order_value']:,.2f}",
-                f"Avg Discount: {kpis['avg_discount']*100:.1f}%",
-            ]
-        except Exception:
-            pass
-        for group_col in ["Region", "Category", "Segment"]:
-            if group_col in df.columns and "Sales" in df.columns:
+    if query_result:
+        context = f"""The user asked: "{question}"
+
+A pandas query was run on the dataset and returned this result:
+--- QUERY RESULT ---
+{query_result[:3000]}
+--- END RESULT ---
+
+Answer the user's question naturally using this result. Be warm, direct, and concise (1-4 sentences).
+Format numbers with commas and $ signs where appropriate."""
+    else:
+        # Fallback — no query result, use dataset summary
+        summary_lines = [f"Dataset: {ds_name}"]
+        if df is not None and not df.empty:
+            num_cols = df.select_dtypes(include="number").columns.tolist()
+            for col in num_cols[:6]:
                 try:
-                    breakdown = df.groupby(group_col)["Sales"].sum().sort_values(ascending=False)
                     summary_lines.append(
-                        f"Sales by {group_col}: " +
-                        ", ".join(f"{k}=${v:,.0f}" for k, v in breakdown.head(6).items())
+                        f"  {col}: total={df[col].sum():,.2f}, avg={df[col].mean():,.2f}"
                     )
                 except Exception:
                     pass
+            if is_sales:
+                try:
+                    kpis = _build_kpis_dict(df)
+                    summary_lines += [
+                        f"Total Sales: ${kpis['total_sales']:,.0f}",
+                        f"Total Profit: ${kpis['total_profit']:,.0f}",
+                        f"Total Orders: {kpis['total_orders']:,}",
+                    ]
+                except Exception:
+                    pass
+        context = f"""The user asked: "{question}"
 
-    data_summary = "\n".join(summary_lines)
+Use this dataset summary to answer as best you can:
+{chr(10).join(summary_lines)}
 
-    persona = "AI Sales Assistant" if is_sales else "AI Dataset Assistant"
-    topic   = "sales performance, trends, and business insights" if is_sales else "dataset statistics, trends, and data insights"
+Be warm, direct, and concise (1-4 sentences)."""
 
-    return f"""You are a friendly and knowledgeable {persona}. You speak like a helpful colleague — warm, clear, and confident.
+    system = f"""You are {persona} for Zero Click AI — a smart, friendly colleague.
+Your personality: warm, direct, confident. Give real answers with real numbers.
+- For greetings: respond warmly and briefly
+- For data questions: lead with the number, then a short insight
+- Keep it 1-4 sentences
+- Never say "I cannot find" or "data is unavailable"
+- If completely unrelated to the dataset, say you're here to help with the data"""
 
-You have full access to the following dataset summary. Use it to answer every question accurately and directly.
-
---- DATASET SUMMARY ---
-{data_summary}
---- END SUMMARY ---
-
-GUIDELINES:
-- Always answer directly using the numbers above — never say data is unavailable
-- Be conversational and warm, not robotic or overly formal
-- Lead with the actual answer, then add a brief insight if it adds value
-- Use the conversation history to handle follow-ups naturally ("that region", "it", "those products")
-- Format numbers with commas and dollar signs where appropriate
-- Keep answers concise but complete — avoid one-word replies and avoid walls of text
-- If asked something outside {topic}, say: "I'm set up to help with {topic} — feel free to ask me anything about that!"
-"""
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": context},
+    ]
 
 
 @app.post("/api/chat/message")
@@ -1411,66 +1505,84 @@ def chat_message(req: ChatRequest, _user: dict = Depends(get_current_user)):
     if len(_chat_history[email]) > 20:
         _chat_history[email] = _chat_history[email][-20:]
 
-    parsed   = {}
-    nlp_data = None
-
-    # Step 1 — Run NLP pipeline to extract structured data context
-    if HAS_NLP and df is not None:
-        try:
-            parsed   = process_query(req.message, df=df, dataset_meta=meta)
-            result   = execute_query(df, parsed)
-            nlp_data = generate_response(parsed, result)
-        except Exception:
-            nlp_data = None
-
-    # Step 2 — Build Groq message with NLP context injected
     groq = _get_groq_client()
-    if groq is not None:
+
+    if groq is None:
+        # No Groq key — fall back to NLP pipeline
+        response = "Groq API key not configured. Please set GROQ_API_KEY."
+        if HAS_NLP and df is not None:
+            try:
+                parsed   = process_query(req.message, df=df, dataset_meta=meta)
+                result   = execute_query(df, parsed)
+                response = generate_response(parsed, result)
+            except Exception:
+                pass
+        _chat_history[email].append({"role": "assistant", "content": response})
+        return {"reply": response, "intent": None, "history": _chat_history[email][-6:], "suggestions": []}
+
+    query_result = None
+    is_data_question = df is not None and not df.empty
+
+    # ── Step 1: Detect if this is a data question or a greeting/chitchat ──────
+    # Simple heuristic — skip code generation for short greetings
+    msg_lower = req.message.strip().lower()
+    greeting_patterns = ["hi", "hello", "hey", "thanks", "thank you", "bye",
+                         "good morning", "good afternoon", "good evening", "how are you"]
+    is_greeting = any(msg_lower == g or msg_lower.startswith(g + " ") or msg_lower.startswith(g + "!") or msg_lower.startswith(g + ",")
+                      for g in greeting_patterns)
+
+    # ── Step 2: Generate and execute pandas code (only for data questions) ────
+    if is_data_question and not is_greeting:
         try:
-            system_prompt = _build_chat_system_prompt(df, meta)
-
-            # Inject NLP-extracted data as extra context so Groq has precise numbers
-            user_content = req.message
-            if nlp_data and nlp_data != req.message:
-                user_content = (
-                    f"{req.message}\n\n"
-                    f"[Computed data context]: {nlp_data}"
-                )
-
-            # Build message list with conversation history
-            messages = [{"role": "system", "content": system_prompt}]
-            for h in _chat_history[email][:-1]:  # exclude the just-appended user msg
-                messages.append({"role": h["role"], "content": h["content"]})
-            messages.append({"role": "user", "content": user_content})
-
-            groq_resp = groq.chat.completions.create(
+            code_messages = _build_code_gen_prompt(df, req.message)
+            code_resp = groq.chat.completions.create(
                 model=GROQ_CHAT_MODEL,
-                messages=messages,
-                max_tokens=1024,
-                temperature=0.7,
+                messages=code_messages,
+                max_tokens=256,
+                temperature=0.1,   # low temp = deterministic, precise code
             )
-            response = groq_resp.choices[0].message.content.strip()
+            generated_code = code_resp.choices[0].message.content.strip()
 
-        except Exception as e:
-            # Surface the real error so it's visible during debugging
-            response = nlp_data or f"⚠️ Groq error: {e}"
-    else:
-        # No Groq key found — use NLP response or fallback
-        if nlp_data:
-            response = nlp_data
-        elif df is not None:
-            response = f"NLP module unavailable. Dataset has {len(df):,} rows loaded."
-        else:
-            response = "No dataset loaded. Please upload a file first."
+            if generated_code and generated_code != "CANNOT_ANSWER":
+                success, result_str = _safe_execute(generated_code, df)
+                if success:
+                    query_result = result_str
+        except Exception:
+            query_result = None  # fall through to summary-based answer
+
+    # ── Step 3: Generate natural language answer ──────────────────────────────
+    try:
+        answer_messages = _build_answer_prompt(df, meta, req.message, query_result)
+
+        # Inject conversation history for follow-up context
+        # Insert history between system and the final user message
+        system_msg = answer_messages[0]
+        user_msg   = answer_messages[1]
+        full_messages = [system_msg]
+        for h in _chat_history[email][:-1]:   # exclude just-appended user msg
+            full_messages.append({"role": h["role"], "content": h["content"]})
+        full_messages.append(user_msg)
+
+        answer_resp = groq.chat.completions.create(
+            model=GROQ_CHAT_MODEL,
+            messages=full_messages,
+            max_tokens=512,
+            temperature=0.7,
+        )
+        response = answer_resp.choices[0].message.content.strip()
+
+    except Exception as e:
+        response = f"⚠️ Error generating response: {e}"
 
     _chat_history[email].append({"role": "assistant", "content": response})
 
     return {
         "reply":       response,
-        "intent":      parsed.get("intent") if parsed else None,
+        "intent":      None,
         "history":     _chat_history[email][-6:],
         "suggestions": meta.get("suggestions", []),
     }
+
 
 @app.delete("/api/chat/history")
 def clear_chat(_user: dict = Depends(get_current_user)):
@@ -1488,6 +1600,7 @@ def chat_status(_user: dict = Depends(get_current_user)):
         "groq_key_preview": (key[:8] + "...") if key else "NOT FOUND",
         "groq_client_ready": groq is not None,
         "model": GROQ_CHAT_MODEL,
+        "mode": "text-to-pandas + natural language answer",
     }
 
 # ═════════════════════════════════════════════════════════════════════════════

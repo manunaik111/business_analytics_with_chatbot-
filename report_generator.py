@@ -244,27 +244,62 @@ def chart_category(df, ct):
     if sbc.empty or sbc["Sales"].sum() == 0: return None
     category_label = _group_label(_cat(df, ct), "Category")
     metric_label = _metric_label(df, ct)
-    fig, ax = plt.subplots(figsize=(5.2, 2.8))
+
+    # ── Cap at top 8 slices; group the rest as "Others" ─────────────────────
+    MAX_SLICES = 8
+    if len(sbc) > MAX_SLICES:
+        top   = sbc.head(MAX_SLICES).copy()
+        other_sales = sbc.iloc[MAX_SLICES:]["Sales"].sum()
+        other_share = sbc.iloc[MAX_SLICES:]["Share %"].sum()
+        others = pd.DataFrame({"Category": ["Others"],
+                               "Sales":    [round(other_sales, 2)],
+                               "Share %":  [round(other_share, 1)]})
+        sbc = pd.concat([top, others], ignore_index=True)
+
     n = len(sbc)
-    purples = plt.cm.Purples(np.linspace(0.38, 0.92, n))
+
+    # ── Figure: taller to give room for legend below ─────────────────────────
+    fig, ax = plt.subplots(figsize=(5.6, 3.4))
+    fig.patch.set_facecolor("white")
+
+    palette = plt.cm.tab10.colors[:n] if n > 8 else plt.cm.Purples(
+        np.linspace(0.35, 0.90, n))
+
     wedges, texts, autotexts = ax.pie(
         sbc["Sales"],
-        labels=sbc["Category"].astype(str).str[:12],
-        autopct="%1.1f%%", startangle=140,
-        colors=purples,
-        wedgeprops=dict(width=0.52, edgecolor="white", linewidth=1.5),
-        pctdistance=0.78,
+        autopct=lambda p: f"{p:.1f}%" if p >= 3 else "",   # hide tiny % labels
+        startangle=140,
+        colors=palette,
+        wedgeprops=dict(width=0.55, edgecolor="white", linewidth=1.8),
+        pctdistance=0.75,
+        labeldistance=None,  # suppress outer labels — use legend instead
     )
-    for t in texts: t.set_fontsize(7); t.set_color("#374151")
-    for a in autotexts: a.set_fontsize(6.5); a.set_color("white"); a.set_fontweight("bold")
+    for a in autotexts:
+        a.set_fontsize(6.5)
+        a.set_color("white")
+        a.set_fontweight("bold")
+
     ax.set_title(f"{metric_label} by {category_label}", fontsize=10, fontweight="bold",
-                 color="#7C3AED", pad=8, loc="left")
-    # Legend on right
-    ax.legend(sbc["Category"].astype(str).str[:14].tolist(),
-              loc="center right", bbox_to_anchor=(1.35, 0.5),
-              fontsize=6.5, frameon=False)
-    fig.patch.set_facecolor("white")
-    plt.tight_layout(pad=0.5)
+                 color="#7C3AED", pad=6, loc="left")
+
+    # ── Legend outside the donut, below ──────────────────────────────────────
+    legend_labels = [
+        f"{row['Category'][:16]}  ({row['Share %']:.1f}%)"
+        for _, row in sbc.iterrows()
+    ]
+    ax.legend(
+        wedges, legend_labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.05),
+        ncol=min(3, n),
+        fontsize=6.5,
+        frameon=False,
+        handlelength=1.0,
+        handleheight=0.8,
+        columnspacing=0.8,
+    )
+
+    plt.tight_layout(pad=0.3)
     return _fig_bytes(fig)
 
 def chart_trend(df, ct):
@@ -347,10 +382,15 @@ def chart_heatmap(df, ct):
     dc = dcs[0]
     tmp = df.copy()
     tmp[dc] = pd.to_datetime(tmp[dc], errors="coerce")
-    tmp["month"] = tmp[dc].dt.month
-    tmp["year"]  = tmp[dc].dt.year
+    tmp = tmp.dropna(subset=[dc])                  # drop NaT rows before int cast
+    if tmp.empty: return None
+    tmp["month"] = tmp[dc].dt.month.astype(int)
+    tmp["year"]  = tmp[dc].dt.year.astype(int)
     piv = tmp.pivot_table(index="year", columns="month", values=sc, aggfunc="sum")
     if piv.empty: return None
+    piv = piv.fillna(0)
+    piv.columns = piv.columns.astype(int)
+    piv.index   = piv.index.astype(int)
     fig, ax = plt.subplots(figsize=(5.2, 2.8))
     months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
     im = ax.imshow(piv.values, cmap="Purples", aspect="auto", interpolation="nearest")
@@ -401,7 +441,7 @@ def _hf(canvas, doc):
         f"  Report Date: {NOW.strftime('%Y-%m-%d')}  |  "
         f"Period: Data from Jan 2025 – Mar 2026")
     canvas.drawRightString(w - 12*mm, h - 21*mm,
-        "Source: AI Sales Chatbot System  ")
+        "Source: Zero Click AI  ")
     # Footer
     canvas.setFillColor(colors.HexColor("#9CA3AF"))
     canvas.setFont("Helvetica-Oblique", 7)
@@ -626,7 +666,7 @@ def generate_report_pdf(df, kpis, ml_results, forecast_data, insights, charts) -
             print(f"  Chart '{title}' skipped: {e}")
 
     CW = (pw - 4*mm) / 2
-    CH = 56  # mm height for each chart
+    CH = 68  # mm height for each chart (taller for pie/donut legend space)
     for i in range(0, len(chart_imgs), 2):
         lt, lb = chart_imgs[i]
         rt, rb = chart_imgs[i+1] if i+1 < len(chart_imgs) else (None, None)
@@ -822,22 +862,61 @@ def generate_report_excel(df, kpis, ml_results, forecast_data, insights) -> byte
     # ── KPIs ──────────────────────────────────────────────────────────────────
     ws2 = wb.create_sheet("KPIs")
     acc2 = _SHEET_ACCENTS["KPIs"]
-    _xl_title(ws2, "Key Performance Indicators", end_col=4, accent=acc2)
-    kpi_rows = [[str(k[0]), str(k[1]), str(k[2]) if len(k)>2 else ""]
+    _xl_title(ws2, "Key Performance Indicators", end_col=5, accent=acc2)
+
+    # Build KPI rows and extract numeric values for charting
+    kpi_rows = [[str(k[0]), str(k[1]), str(k[2]) if len(k) > 2 else ""]
                 for k in (kpis or [])]
-    _xl_hdr(ws2, 2, ["Metric", "Value", "Description"], acc2)
+
+    # Column E holds numeric-only values extracted from Value strings (for chart)
+    def _parse_numeric(s):
+        """Extract a float from strings like '$8.03B', '21.5%', '1,234'. Returns None if unparseable."""
+        import re
+        s = str(s).strip().replace(",", "").replace("$", "").replace("%", "")
+        s = s.replace("B", "e9").replace("M", "e6").replace("K", "e3").replace("k", "e3")
+        try:
+            return float(s)
+        except Exception:
+            return None
+
+    _xl_hdr(ws2, 2, ["Metric", "Value", "Description", "", "Numeric Value"], acc2)
     for i, r in enumerate(kpi_rows):
-        _xl_row(ws2, i+3, r, alt=i%2==0, accent=acc2)
+        _xl_row(ws2, i + 3, r + ["", ""], alt=i % 2 == 0, accent=acc2)
+        # Write numeric value in col E (column 5)
+        num_val = _parse_numeric(r[1]) if len(r) > 1 else None
+        if num_val is not None:
+            cell = ws2.cell(row=i + 3, column=5, value=num_val)
+            cell.font = Font(size=9, color="166534")
+            cell.alignment = Alignment(horizontal="center")
+            cell.fill = PatternFill("solid", fgColor="F0FDF4")
+
     ws2.column_dimensions["A"].width = 32
     ws2.column_dimensions["B"].width = 22
     ws2.column_dimensions["C"].width = 42
-    if len(kpi_rows) >= 2:
-        ch = BarChart(); ch.title = "KPI Values"; ch.style = 10
-        ch.width = 16; ch.height = 9
-        data = Reference(ws2, min_col=2, min_row=2, max_row=2+len(kpi_rows))
-        cats = Reference(ws2, min_col=1, min_row=3, max_row=2+len(kpi_rows))
-        ch.add_data(data, titles_from_data=True); ch.set_categories(cats)
-        ws2.add_chart(ch, "E2")
+    ws2.column_dimensions["D"].width = 4
+    ws2.column_dimensions["E"].width = 18
+    ws2.cell(row=2, column=5, value="Numeric Value").font = Font(bold=True, color="FFFFFF", size=10)
+    ws2.cell(row=2, column=5).fill = PatternFill("solid", fgColor=acc2)
+    ws2.cell(row=2, column=5).alignment = Alignment(horizontal="center")
+
+    # Chart: use col E (numeric values) vs col A (metric names) — guaranteed numbers
+    n_kpi = len(kpi_rows)
+    if n_kpi >= 2:
+        ch = BarChart()
+        ch.type = "bar"          # horizontal bars — easier to read long metric names
+        ch.title = "KPI Numeric Values"
+        ch.style = 10
+        ch.width = 18
+        ch.height = max(9, n_kpi * 1.2)
+        ch.grouping = "clustered"
+        ch.overlap = 100
+        # Data: col E rows 3..(3+n_kpi-1)
+        data = Reference(ws2, min_col=5, min_row=2, max_row=2 + n_kpi)
+        cats = Reference(ws2, min_col=1, min_row=3, max_row=2 + n_kpi)
+        ch.add_data(data, titles_from_data=True)
+        ch.set_categories(cats)
+        ch.series[0].graphicalProperties.solidFill = acc2
+        ws2.add_chart(ch, "G2")
 
     # ── Sales by Region ───────────────────────────────────────────────────────
     ws3 = wb.create_sheet("Sales_by_Region")
