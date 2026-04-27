@@ -43,7 +43,7 @@
     .member-card:hover { border-color: var(--burgundy-border); transform: translateY(-4px); box-shadow: 0 12px 40px rgba(109,0,26,0.2); }
     .member-card.is-lead { border-color: rgba(245,158,11,0.35); }
     .member-card.is-lead:hover { border-color: rgba(245,158,11,0.65); box-shadow: 0 12px 40px rgba(245,158,11,0.15); }
-    .member-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--accent-color, var(--burgundy-lt)); opacity: var(--accent-opacity, 0.7); }
+    .member-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent-color, var(--burgundy-lt)), transparent); opacity: var(--accent-opacity, 0.7); }
 
     /* Lead badge */
     .lead-badge {
