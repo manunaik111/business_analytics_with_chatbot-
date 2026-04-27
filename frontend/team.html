@@ -73,7 +73,15 @@
       border: 1px solid rgba(109,0,26,0.25);
     }
 
-    .member-module { font-size: 9px; color: var(--text-hint); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.8px; }
+    .member-module { font-size: 9px; color: var(--text-hint); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.8px; }
+
+    /* Tech stack pills */
+    .member-tech { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-bottom: 10px; }
+    .tech-pill {
+      font-size: 7.5px; font-weight: 600; padding: 2px 7px; border-radius: 20px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      color: var(--accent-color, #aaa); white-space: nowrap; letter-spacing: 0.3px;
+    }
 
     /* Social links */
     .member-links { display: flex; justify-content: center; gap: 8px; }
@@ -91,6 +99,8 @@
     .social-btn.linkedin:hover { background: rgba(10,102,194,0.18); border-color: rgba(10,102,194,0.6); color: #2d8fe8; }
     .social-btn.github  { color: #cccccc; border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.05); }
     .social-btn.github:hover  { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.35); color: #ffffff; }
+    .social-btn.email   { color: #f87171; border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.07); }
+    .social-btn.email:hover   { background: rgba(248,113,113,0.16); border-color: rgba(248,113,113,0.55); color: #fca5a5; }
 
     /* ── Module legend ── */
     .module-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-bottom: 56px; }
@@ -172,12 +182,18 @@
         <div class="member-name">Naheen Kauser</div>
         <div class="member-role-badge" style="color:#F59E0B;background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.25)">Team Lead</div>
         <div class="member-module">Module 4 · Dashboard</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Streamlit</span><span class="tech-pill">Plotly</span><span class="tech-pill">Pandas</span><span class="tech-pill">ReportLab</span><span class="tech-pill">OpenPyXL</span><span class="tech-pill">Team Leadership</span><span class="tech-pill">Project Mgmt</span>
+        </div>
         <div class="member-links">
           <a href="https://in.linkedin.com/in/naheen-kauser-02957a323" target="_blank" class="social-btn linkedin" title="LinkedIn">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
           </a>
           <a href="https://github.com/NaheenKauserr" target="_blank" class="social-btn github" title="GitHub">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:naheenkauser113@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           </a>
         </div>
       </div>
@@ -188,12 +204,18 @@
         <div class="member-name">Manu Naik</div>
         <div class="member-role-badge" style="color:#60a5fa;background:rgba(96,165,250,0.1);border-color:rgba(96,165,250,0.25)">Systems Engineer</div>
         <div class="member-module">Module 5 · Integration</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Streamlit</span><span class="tech-pill">Groq API</span><span class="tech-pill">LLaMA</span><span class="tech-pill">SMTP</span><span class="tech-pill">SpeechRecognition</span><span class="tech-pill">Session State</span><span class="tech-pill">System Integration</span>
+        </div>
         <div class="member-links">
           <a href="https://www.linkedin.com/in/manu-naik-73bb702a7" target="_blank" class="social-btn linkedin" title="LinkedIn">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
           </a>
           <a href="https://github.com/manunaik111" target="_blank" class="social-btn github" title="GitHub">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:manupnaik639@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           </a>
         </div>
       </div>
@@ -204,12 +226,18 @@
         <div class="member-name">Dhaval Shah</div>
         <div class="member-role-badge" style="color:#818cf8;background:rgba(129,140,248,0.1);border-color:rgba(129,140,248,0.25)">NLP Engineer</div>
         <div class="member-module">Module 2 · Chatbot</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">NLTK</span><span class="tech-pill">spaCy</span><span class="tech-pill">Regex</span><span class="tech-pill">Intent Classification</span><span class="tech-pill">NER</span><span class="tech-pill">Groq API</span>
+        </div>
         <div class="member-links">
           <a href="https://www.linkedin.com/in/dhaval-shah1628" target="_blank" class="social-btn linkedin" title="LinkedIn">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
           </a>
           <a href="https://github.com/Dhaval-max3" target="_blank" class="social-btn github" title="GitHub">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:d34058397@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           </a>
         </div>
       </div>
@@ -220,12 +248,18 @@
         <div class="member-name">Mohammed Ammar</div>
         <div class="member-role-badge" style="color:#38bdf8;background:rgba(56,189,248,0.1);border-color:rgba(56,189,248,0.25)">Data Engineer</div>
         <div class="member-module">Module 1 · Data Mgmt</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Pandas</span><span class="tech-pill">NumPy</span><span class="tech-pill">Data Cleaning</span><span class="tech-pill">Type Inference</span><span class="tech-pill">File Uploader</span><span class="tech-pill">Data Validation</span>
+        </div>
         <div class="member-links">
           <a href="https://www.linkedin.com/in/mohammed-ammar-bin-zameer-589220363/" target="_blank" class="social-btn linkedin" title="LinkedIn">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
           </a>
           <a href="https://github.com/ammar3633" target="_blank" class="social-btn github" title="GitHub">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:mohammedammar060802@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           </a>
         </div>
       </div>
@@ -236,12 +270,18 @@
         <div class="member-name">Yusuf Chonche</div>
         <div class="member-role-badge" style="color:#34d399;background:rgba(52,211,153,0.1);border-color:rgba(52,211,153,0.25)">UI Developer</div>
         <div class="member-module">Module 4 · Dashboard</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Streamlit</span><span class="tech-pill">Plotly</span><span class="tech-pill">CSS Glass UI</span><span class="tech-pill">HTML</span><span class="tech-pill">Responsive Design</span><span class="tech-pill">Data Viz</span>
+        </div>
         <div class="member-links">
           <a href="https://www.linkedin.com/in/yusuf-chonche-5114892ba/" target="_blank" class="social-btn linkedin" title="LinkedIn">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
           </a>
           <a href="https://github.com/yusufchonche0-web" target="_blank" class="social-btn github" title="GitHub">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:yusufchonche0@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           </a>
         </div>
       </div>
@@ -256,12 +296,18 @@
         <div class="member-name">Vaishnavi Metri</div>
         <div class="member-role-badge" style="color:#fbbf24;background:rgba(251,191,36,0.1);border-color:rgba(251,191,36,0.25)">Analytics Engineer</div>
         <div class="member-module">Module 3 · Analytics</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Pandas</span><span class="tech-pill">NumPy</span><span class="tech-pill">Statistical Analysis</span><span class="tech-pill">KPI Design</span><span class="tech-pill">Streamlit</span><span class="tech-pill">Data Aggregation</span>
+        </div>
         <div class="member-links">
           <a href="https://www.linkedin.com/in/vaishnavi-metri-578b0835a" target="_blank" class="social-btn linkedin" title="LinkedIn">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
           </a>
           <a href="https://github.com/vaishnavimetri234-v11s" target="_blank" class="social-btn github" title="GitHub">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:vaishnavimetri234@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           </a>
         </div>
       </div>
@@ -272,12 +318,18 @@
         <div class="member-name">Anoosha Kembhavi</div>
         <div class="member-role-badge" style="color:#f9a8d4;background:rgba(249,168,212,0.1);border-color:rgba(249,168,212,0.25)">Systems Engineer</div>
         <div class="member-module">Module 5 · Integration</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Streamlit</span><span class="tech-pill">SpeechRecognition</span><span class="tech-pill">Plotly</span><span class="tech-pill">UI Components</span><span class="tech-pill">Session State</span><span class="tech-pill">Integration</span>
+        </div>
         <div class="member-links">
           <a href="http://www.linkedin.com/in/anoosha-kembhavi" target="_blank" class="social-btn linkedin" title="LinkedIn">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
           </a>
           <a href="https://github.com/anooshakembhavi-afk" target="_blank" class="social-btn github" title="GitHub">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:anooshakembhavi@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           </a>
         </div>
       </div>
@@ -288,12 +340,18 @@
         <div class="member-name">Snehal Kamble</div>
         <div class="member-role-badge" style="color:#fb923c;background:rgba(251,146,60,0.1);border-color:rgba(251,146,60,0.25)">Data Engineer</div>
         <div class="member-module">Module 1 · Data Mgmt</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Pandas</span><span class="tech-pill">Data Cleaning</span><span class="tech-pill">Preprocessing</span><span class="tech-pill">NumPy</span><span class="tech-pill">Regex</span><span class="tech-pill">Data Quality</span>
+        </div>
         <div class="member-links">
           <a href="https://www.linkedin.com/in/snehal-k-b48369318" target="_blank" class="social-btn linkedin" title="LinkedIn">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
           </a>
           <a href="https://github.com/kamblesnehal578-sketch" target="_blank" class="social-btn github" title="GitHub">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:kamblesnehal578@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           </a>
         </div>
       </div>
@@ -304,12 +362,18 @@
         <div class="member-name">Nazhat Naikwadi</div>
         <div class="member-role-badge" style="color:#f472b6;background:rgba(244,114,182,0.1);border-color:rgba(244,114,182,0.25)">Data Engineer</div>
         <div class="member-module">Module 1 · Data Mgmt</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Pandas</span><span class="tech-pill">Data Profiling</span><span class="tech-pill">Schema Detection</span><span class="tech-pill">Type Inference</span><span class="tech-pill">Data Management</span>
+        </div>
         <div class="member-links">
           <a href="https://linkedin.com/in/nazhatnaikwadi" target="_blank" class="social-btn linkedin" title="LinkedIn">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
           </a>
           <a href="https://github.com/nazhatnaikwadi" target="_blank" class="social-btn github" title="GitHub">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:nazhatnaikwadi@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           </a>
         </div>
       </div>
@@ -320,12 +384,18 @@
         <div class="member-name">Keerti Gadigeppagoudar</div>
         <div class="member-role-badge" style="color:#2dd4bf;background:rgba(45,212,191,0.1);border-color:rgba(45,212,191,0.25)">Analytics Engineer</div>
         <div class="member-module">Module 3 · Analytics</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Pandas</span><span class="tech-pill">NLTK</span><span class="tech-pill">Text Preprocessing</span><span class="tech-pill">Keyword Extraction</span><span class="tech-pill">Forecasting</span><span class="tech-pill">Statistical Analysis</span>
+        </div>
         <div class="member-links">
           <a href="https://www.linkedin.com/in/keertig" target="_blank" class="social-btn linkedin" title="LinkedIn">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
           </a>
           <a href="https://github.com/keertiG-1296" target="_blank" class="social-btn github" title="GitHub">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:keerti.s.g2020@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           </a>
         </div>
       </div>
@@ -336,12 +406,18 @@
         <div class="member-name">Samruddhi Patil</div>
         <div class="member-role-badge" style="color:#4ade80;background:rgba(74,222,128,0.1);border-color:rgba(74,222,128,0.25)">NLP Engineer</div>
         <div class="member-module">Module 2 · Chatbot</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Streamlit</span><span class="tech-pill">Plotly</span><span class="tech-pill">NLTK</span><span class="tech-pill">Chatbot Design</span><span class="tech-pill">Response Formatting</span><span class="tech-pill">UI Layout</span>
+        </div>
         <div class="member-links">
           <a href="https://www.linkedin.com/in/samruddhi-patil-a1575933a" target="_blank" class="social-btn linkedin" title="LinkedIn">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
           </a>
           <a href="https://github.com/samruddhi128" target="_blank" class="social-btn github" title="GitHub">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:patilsamruddhi863@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           </a>
         </div>
       </div>
