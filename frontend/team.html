@@ -43,7 +43,7 @@
     .member-card:hover { border-color: var(--burgundy-border); transform: translateY(-4px); box-shadow: 0 12px 40px rgba(109,0,26,0.2); }
     .member-card.is-lead { border-color: rgba(245,158,11,0.35); }
     .member-card.is-lead:hover { border-color: rgba(245,158,11,0.65); box-shadow: 0 12px 40px rgba(245,158,11,0.15); }
-    .member-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--accent-color, var(--burgundy-lt)); opacity: 0.7; }
+    .member-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--accent-color, var(--burgundy-lt)); opacity: var(--accent-opacity, 0.7); }
 
     /* Lead badge */
     .lead-badge {
@@ -199,10 +199,10 @@
       </div>
 
       <!-- Manu -->
-      <div class="member-card" style="--accent-color:#60a5fa">
-        <div class="member-avatar" style="background:linear-gradient(135deg,#60a5fa,#1d4ed8)">MN</div>
+      <div class="member-card" style="--accent-color:#94a3b8; --accent-opacity:0.3">
+        <div class="member-avatar" style="background:linear-gradient(135deg,#94a3b8,#334155)">MN</div>
         <div class="member-name">Manu Naik</div>
-        <div class="member-role-badge" style="color:#60a5fa;background:rgba(96,165,250,0.1);border-color:rgba(96,165,250,0.25)">Systems Engineer</div>
+        <div class="member-role-badge" style="color:#94a3b8;background:rgba(148,163,184,0.1);border-color:rgba(148,163,184,0.25)">Systems Engineer</div>
         <div class="member-module">Module 5 · Integration</div>
         <div class="member-tech">
           <span class="tech-pill">Python</span><span class="tech-pill">Streamlit</span><span class="tech-pill">Groq API</span><span class="tech-pill">LLaMA</span><span class="tech-pill">SMTP</span><span class="tech-pill">SpeechRecognition</span><span class="tech-pill">Session State</span><span class="tech-pill">System Integration</span>
