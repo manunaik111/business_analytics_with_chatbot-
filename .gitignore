@@ -41,7 +41,10 @@ output.json
 
 # ── Data — optional, comment out if you want to push the CSV ──
 # data/SALES_DATA_SETT.csv
+<<<<<<< HEAD
 data/uploads/*
 !data/uploads/.gitkeep
 data/_active_upload.pkl
 data/_active_upload_meta.json
+=======
+>>>>>>> team/team5-integration

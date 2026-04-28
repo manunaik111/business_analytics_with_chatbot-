@@ -2,7 +2,11 @@
 from .auth_manager import (
     init_db, init_session, login_user, logout_user,
     is_authenticated, current_user, can,
+<<<<<<< HEAD
     create_user, register_viewer, get_all_users, update_user_role,
+=======
+    create_user, get_all_users, update_user_role,
+>>>>>>> team/team5-integration
     toggle_user_active, delete_user, reset_password
 )
 from .roles import (
@@ -14,6 +18,7 @@ from .roles import (
     PERM_MANAGE_USERS, PERM_VIEW_AI_INSIGHTS, PERM_VIEW_ALL_CHARTS,
     ROLE_COLORS, ROLE_DESCRIPTIONS
 )
+<<<<<<< HEAD
 from .landing_page import show_landing_page
 from .login_page import show_login_page
 from .register_page import show_register_page
@@ -23,3 +28,7 @@ from .loading import (
     show_skeleton_kpi, show_skeleton_chart, show_skeleton_text,
     show_progress_bar, loading_section, timed_loader, wrap_page_fade
 )
+=======
+from .login_page import show_login_page
+from .user_management import show_user_management
+>>>>>>> team/team5-integration

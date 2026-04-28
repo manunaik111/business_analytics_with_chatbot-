@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <div align="center">
 
 # ⚡ Zero Click AI
@@ -108,12 +109,52 @@ The platform was designed and built from scratch by a team of 11 interns across 
    │  users   │       │  API     │       │  data/       │
    │  .db     │       │  LLaMA   │       │  uploads/    │
    └──────────┘       └──────────┘       └──────────────┘
+=======
+# AI Chatbot with Company Data Analysis
+
+**Team 5 — Integration & Interface**
+
+This branch contains the integration layer that connects all project modules into a single working application.
+
+---
+
+## What Team 5 Built
+
+- `main_app.py` — application entry point integrating all modules
+- `chatbot/chatbot_engine.py` — AI chatbot with stateful conversation memory
+- `report_generator.py` — PDF and Excel report generation
+- Full Streamlit UI with floating chatbot interface
+- Sidebar filters connected to all dashboard components
+- Startup loading screen and error handling
+
+---
+
+## Setup
+
+```bash
+git clone https://github.com/manunaik111/AI-Sales-Chatbot-System.git
+cd AI-Sales-Chatbot-System
+py -3.11 -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+python -m nltk.downloader punkt stopwords punkt_tab
+```
+
+Create `.streamlit/secrets.toml`:
+```toml
+AI_API_KEY = "your-groq-api-key"
+```
+
+```bash
+streamlit run main_app.py
+>>>>>>> team/team5-integration
 ```
 
 ---
 
 ## Tech Stack
 
+<<<<<<< HEAD
 | Layer | Technology |
 |---|---|
 | Backend framework | FastAPI 0.115 + Uvicorn |
@@ -525,3 +566,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the branching strategy, commit conven
 **Zero Click AI** &nbsp;·&nbsp; Genesis Training &nbsp;·&nbsp; Python & AI Internship &nbsp;·&nbsp; Powered by Groq AI
 
 </div>
+=======
+Python 3.11 · Streamlit · Groq API · Pandas · fpdf2 · openpyxl · streamlit-float
+>>>>>>> team/team5-integration
