@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: zero-click-ai
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false

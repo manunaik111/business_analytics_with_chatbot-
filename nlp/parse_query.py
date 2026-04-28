@@ -1,6 +1,6 @@
 import json
-from entity_extractor import extract_entities
-from intent_classifier import predict_intent
+from nlp.entity_extractor import extract_entities
+from nlp.intent_classifier import predict_intent
 
 def parse_query(query, product_list):
 

@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Predictive Analytics — Zero Click AI</title>
+  <link rel="stylesheet" href="styles.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    .dash-wrap { display:flex; min-height:100vh; padding-top:58px; overflow:hidden; }
+    .main {
+      flex:1; margin-left:230px; padding:0 28px 80px;
+      height:calc(100vh - 58px); overflow-y:auto; overflow-x:hidden;
+      transition:margin-left 0.35s cubic-bezier(0.25,0.46,0.45,0.94);
+    }
+    .main.collapsed { margin-left:56px; }
+
+    .topbar { display:flex; align-items:center; justify-content:space-between; padding:20px 0 16px; border-bottom:1px solid var(--glass-border); margin-bottom:24px; }
+    .topbar-page { font-size:18px; font-weight:700; color:var(--white); letter-spacing:-0.3px; }
+    .topbar-breadcrumb { font-size:10px; color:var(--text-hint); margin-top:3px; }
+    .topbar-breadcrumb span { color:var(--burgundy-lt); }
+
+    .sec-hdr { display:flex; align-items:center; gap:8px; font-size:9px; font-weight:700; letter-spacing:2.5px; text-transform:uppercase; color:var(--text-hint); margin:0 0 14px; }
+    .sec-hdr::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,rgba(109,0,26,0.5),transparent); }
+    .sec-hdr svg { color:var(--burgundy-lt); flex-shrink:0; }
+
+    /* State cards */
+    .state-card { text-align:center; padding:64px 28px; }
+    .state-icon { width:72px; height:72px; background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 18px; color:var(--text-muted); }
+    .state-title { font-size:16px; font-weight:700; color:var(--white); margin-bottom:8px; }
+    .state-sub { font-size:13px; color:var(--text-muted); }
+
+    /* Controls */
+    .controls-bar {
+      background:var(--glass-bg); border:1px solid var(--glass-border);
+      border-radius:var(--r-sm); padding:16px 20px; margin-bottom:24px;
+      display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    }
+    .ctrl-group { display:flex; flex-direction:column; gap:4px; }
+    .ctrl-label { font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); }
+    .ctrl-input {
+      background:rgba(255,255,255,0.04); border:1px solid var(--glass-border);
+      border-radius:6px; color:var(--text-secondary); font-size:12px; font-family:inherit;
+      padding:7px 12px; outline:none; transition:border-color 0.2s;
+    }
+    .ctrl-input:focus { border-color:rgba(109,0,26,0.6); }
+    .ctrl-run {
+      display:flex; align-items:center; gap:7px;
+      background:rgba(109,0,26,0.6); border:1px solid rgba(109,0,26,0.7);
+      border-radius:6px; padding:9px 18px; color:#FF6B6B;
+      font-size:12px; font-weight:700; font-family:inherit; cursor:pointer;
+      transition:all 0.2s; margin-top:14px;
+    }
+    .ctrl-run:hover { background:rgba(109,0,26,0.85); transform:translateY(-1px); }
+
+    /* Summary strip */
+    .summary-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px; }
+    @media(max-width:900px){ .summary-strip { grid-template-columns:repeat(2,1fr); } }
+    .sum-card {
+      background:var(--glass-bg); border:1px solid var(--glass-border);
+      border-radius:var(--r-sm); padding:14px 16px; position:relative; overflow:hidden;
+    }
+    .sum-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--bar-col,var(--burgundy-lt)); }
+    .sum-label { font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px; }
+    .sum-value { font-size:1.4rem; font-weight:900; color:var(--white); }
+    .sum-sub { font-size:9px; color:var(--text-hint); margin-top:3px; }
+
+    /* Chart card */
+    .chart-card {
+      background:var(--glass-bg); backdrop-filter:blur(24px);
+      border:1px solid var(--glass-border); border-radius:var(--r-md);
+      padding:20px; margin-bottom:14px; box-shadow:var(--shadow-card);
+    }
+    .chart-title { font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:14px; display:flex; align-items:center; gap:7px; }
+    .chart-h { height:300px; position:relative; }
+
+    /* Forecast table */
+    .forecast-table-wrap {
+      background:var(--glass-bg); border:1px solid var(--glass-border);
+      border-radius:var(--r-md); overflow:hidden; margin-bottom:24px;
+    }
+    .ft-header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--glass-border); }
+    .ft-title { font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-muted); }
+
+    /* Targets grid */
+    .targets-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:24px; }
+    @media(max-width:700px){ .targets-grid { grid-template-columns:1fr; } }
+    .target-card {
+      background:var(--glass-bg); border:1px solid var(--glass-border);
+      border-radius:var(--r-sm); padding:16px;
+    }
+    .target-label { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
+    .target-value { font-size:1.2rem; font-weight:800; color:var(--white); margin-bottom:4px; }
+    .target-sub { font-size:11px; color:var(--text-hint); }
+    .target-badge { display:inline-block; font-size:9px; font-weight:700; padding:2px 8px; border-radius:20px; margin-top:6px; }
+    .badge-green { background:rgba(74,222,128,0.12); color:#4ADE80; border:1px solid rgba(74,222,128,0.25); }
+    .badge-red   { background:rgba(248,113,113,0.12); color:#F87171; border:1px solid rgba(248,113,113,0.25); }
+    .badge-amber { background:rgba(251,191,36,0.12);  color:#FBBF24; border:1px solid rgba(251,191,36,0.25); }
+
+    /* Sidebar */
+    .sb-logo { width:34px;height:34px;border-radius:8px;flex-shrink:0;background:linear-gradient(135deg,#6D001A,#3D000E);border:1px solid rgba(109,0,26,0.6);display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(109,0,26,0.4); }
+    .sb-brand-name { font-size:13px;font-weight:800;letter-spacing:-0.3px;color:var(--white);line-height:1.2; }
+    .sb-brand-sub { font-size:9px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--text-hint);margin-top:1px; }
+    .sb-divider { height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent);margin:12px 0; }
+    .sb-avatar { width:32px;height:32px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#6D001A,#3D000E);border:1px solid rgba(109,0,26,0.5);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:rgba(255,255,255,0.9); }
+    .sb-user { display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:10px 12px; }
+    .sb-user-name { font-size:12px;font-weight:700;color:var(--white); }
+    .sb-user-role { font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#FF6B6B;margin-top:1px; }
+    .sb-section { font-size:8px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--text-hint);padding:0 2px;margin:16px 0 8px;display:flex;align-items:center;gap:8px; }
+    .sb-section::after { content:'';flex:1;height:1px;background:rgba(255,255,255,.04); }
+    .sb-nav-btn { display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text-muted);cursor:pointer;transition:all .18s;text-decoration:none;border:none;background:transparent;font-family:inherit;width:100%;text-align:left; }
+    .sb-nav-btn:hover { background:var(--white-06);color:var(--white); }
+    .sb-nav-btn.active { background:var(--burgundy-dim);color:#FF6B6B; }
+    .sb-nav-btn svg { flex-shrink:0; }
+    .sidebar.collapsed .sb-hide { display:none!important; }
+    .sidebar.collapsed .sb-header { justify-content:center; }
+    .sb-toggle-icon { transition:transform .35s cubic-bezier(.25,.46,.45,.94); }
+    .burg-hr { height:1px;border:none;background:linear-gradient(90deg,transparent,rgba(109,0,26,.6),rgba(109,0,26,.6),transparent);margin:24px 0; }
+  </style>
+</head>
+<body class="page-fade">
+
+  <nav class="nav">
+    <div class="nav-brand">
+      <button id="sidebarToggleBtn" onclick="toggleSidebar()" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;margin-right:12px;display:flex;align-items:center;padding:6px;border-radius:4px;transition:background .2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+        <svg class="sb-toggle-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+      </button>
+      <div class="nav-brand-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      </div>
+      Zero Click<span style="font-weight:300;color:var(--text-muted);">AI</span>
+    </div>
+    <div class="nav-links">
+      <span id="navRoleBadge" class="badge badge-burg" style="margin-right:8px;">Viewer</span>
+      <a href="landing.html" class="nav-link">Home</a>
+      <a href="dashboard.html" class="nav-link">Dashboard</a>
+      <button onclick="signOut()" class="btn btn-ghost btn-sm">Sign Out</button>
+    </div>
+  </nav>
+
+  <div class="dash-wrap">
+    <aside class="sidebar" id="mainSidebar">
+      <div class="sb-header" style="display:flex;align-items:center;gap:10px;padding:2px 4px 16px;">
+        <div class="sb-logo">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        </div>
+        <div class="sb-hide">
+          <div class="sb-brand-name">Zero Click AI</div>
+          <div class="sb-brand-sub">Analytics</div>
+        </div>
+      </div>
+      <div class="sb-divider"></div>
+      <div class="sb-section sb-hide">Navigation</div>
+      <a href="dashboard.html" class="sb-nav-btn sb-hide">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a href="profiling.html" class="sb-nav-btn sb-hide">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Dataset Profiling
+      </a>
+      <a href="quality.html" class="sb-nav-btn sb-hide">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Data Quality
+      </a>
+      <a href="analytics.html" class="sb-nav-btn active sb-hide">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+        Predictive Analytics
+      </a>
+      <a href="users.html" class="sb-nav-btn sb-hide" id="usersNavLink" style="display:none;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        User Management
+      </a>
+      <div class="sb-divider" style="margin-top:14px;"></div>
+      <div class="sb-user sb-hide">
+        <div class="sb-avatar" id="sbAvatar">A</div>
+        <div>
+          <div class="sb-user-name" id="sbUserName">Admin User</div>
+          <div class="sb-user-role" id="sbUserRole">Admin</div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main" id="mainContent">
+
+      <!-- Topbar -->
+      <div class="topbar">
+        <div>
+          <div class="topbar-page">Predictive Analytics</div>
+          <div class="topbar-breadcrumb">Home › <span>Predictive Analytics</span></div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <span class="badge badge-white" id="datasetNameBadge">No dataset loaded</span>
+          <button class="btn btn-burg btn-sm" onclick="runForecast()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+            Run Forecast
+          </button>
+        </div>
+      </div>
+
+      <!-- No backend -->
+      <div id="noBackendState" class="state-card">
+        <div class="state-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+        </div>
+        <div class="state-title">Connect backend to run forecasts</div>
+        <div class="state-sub" style="margin-bottom:20px;">Set your FastAPI backend URL from the dashboard to enable predictive analytics</div>
+        <a href="dashboard.html" class="btn btn-burg btn-sm">Go to Dashboard</a>
+      </div>
+
+      <!-- Loading -->
+      <div id="loadingState" class="state-card" style="display:none;">
+        <div class="state-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+        </div>
+        <div class="state-title">Running forecast model...</div>
+        <div class="state-sub">Calculating trend, seasonality and projections</div>
+      </div>
+
+      <!-- Main content -->
+      <div id="analyticsContent" style="display:none;">
+
+        <!-- Controls -->
+        <div class="controls-bar">
+          <div class="ctrl-group">
+            <div class="ctrl-label">Forecast Periods (months)</div>
+            <input type="number" id="ctrlPeriods" class="ctrl-input" value="6" min="1" max="24" style="width:120px;">
+          </div>
+          <div class="ctrl-group">
+            <div class="ctrl-label">Target Growth %</div>
+            <input type="number" id="ctrlGrowth" class="ctrl-input" value="10" min="0" max="100" style="width:120px;">
+          </div>
+          <div class="ctrl-group" style="justify-content:flex-end;">
+            <button class="ctrl-run" onclick="runForecast()">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 3 19 12 5 21 5 3"/></svg>
+              Run Forecast
+            </button>
+          </div>
+        </div>
+
+        <!-- Summary strip -->
+        <div class="sec-hdr">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+          Forecast Summary
+        </div>
+        <div class="summary-strip">
+          <div class="sum-card" style="--bar-col:#818CF8;">
+            <div class="sum-label">Forecast Horizon</div>
+            <div class="sum-value" id="sumHorizon">—</div>
+            <div class="sum-sub">Months ahead</div>
+          </div>
+          <div class="sum-card" style="--bar-col:#4ADE80;">
+            <div class="sum-label">Avg Monthly Sales</div>
+            <div class="sum-value" id="sumAvgSales">—</div>
+            <div class="sum-sub">Historical baseline</div>
+          </div>
+          <div class="sum-card" style="--bar-col:#F59E0B;">
+            <div class="sum-label">Target Growth</div>
+            <div class="sum-value" id="sumGrowth">—</div>
+            <div class="sum-sub">Revenue target</div>
+          </div>
+          <div class="sum-card" style="--bar-col:#DC2626;">
+            <div class="sum-label">Model</div>
+            <div class="sum-value" id="sumModel" style="font-size:1rem;">Linear Regression</div>
+            <div class="sum-sub">Forecasting method</div>
+          </div>
+        </div>
+
+        <div class="burg-hr"></div>
+
+        <!-- Forecast chart -->
+        <div class="sec-hdr">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+          Sales Forecast with Confidence Bands
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Historical Sales + Forecast Projection
+          </div>
+          <div class="chart-h"><canvas id="forecastChart"></canvas></div>
+        </div>
+
+        <div class="burg-hr"></div>
+
+        <!-- Targets grid -->
+        <div class="sec-hdr">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Revenue Targets and Alerts
+        </div>
+        <div class="targets-grid" id="targetsGrid">
+          <div class="target-card">
+            <div class="target-label">Target Revenue</div>
+            <div class="target-value" id="tgtRevenue">—</div>
+            <div class="target-sub">Based on growth target</div>
+          </div>
+          <div class="target-card">
+            <div class="target-label">Projected Revenue</div>
+            <div class="target-value" id="tgtProjected">—</div>
+            <div class="target-sub">Model projection</div>
+          </div>
+          <div class="target-card">
+            <div class="target-label">Forecast Status</div>
+            <div class="target-value" id="tgtStatus">—</div>
+            <div class="target-sub" id="tgtStatusSub">—</div>
+          </div>
+        </div>
+
+        <div class="burg-hr"></div>
+
+        <!-- Forecast table -->
+        <div class="sec-hdr">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/></svg>
+          Monthly Forecast Table
+        </div>
+        <div class="forecast-table-wrap">
+          <div class="ft-header">
+            <div class="ft-title" id="forecastTableTitle">Forecast periods</div>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Period</th>
+                  <th>Forecast Sales</th>
+                  <th>Lower Bound (85%)</th>
+                  <th>Upper Bound (115%)</th>
+                  <th>vs Baseline</th>
+                </tr>
+              </thead>
+              <tbody id="forecastTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /analyticsContent -->
+    </main>
+  </div>
+
+  <script src="app.js?v=3"></script>
+  <script>
+    let _forecastChart = null;
+    let _lastData = null;
+
+    document.addEventListener("DOMContentLoaded", init);
+
+    function init() {
+      if (!window.App || !App.isAuthenticated()) { window.location.replace("login.html"); return; }
+      hydrateUser();
+      if (App.hasConfiguredBackend()) {
+        runForecast();
+      } else {
+        document.getElementById("noBackendState").style.display = "block";
+      }
+    }
+
+    function hydrateUser() {
+      const user = App.getUser() || {};
+      const role = user.role || "Viewer";
+      const name = user.name || user.email || "User";
+      const initials = name.split(" ").map(x => x[0]).join("").slice(0,2).toUpperCase();
+      document.getElementById("navRoleBadge").textContent = role;
+      document.getElementById("sbAvatar").textContent = initials;
+      document.getElementById("sbUserName").textContent = name;
+      document.getElementById("sbUserRole").textContent = role;
+      if (["Admin","Sales Manager","Analyst"].includes(role)) {
+        const link = document.getElementById("usersNavLink");
+        if (link) link.style.display = "flex";
+      }
+    }
+
+    async function runForecast() {
+      if (!App.hasConfiguredBackend()) return;
+      const periods = parseInt(document.getElementById("ctrlPeriods").value) || 6;
+      const growth  = parseFloat(document.getElementById("ctrlGrowth").value) || 10;
+
+      document.getElementById("noBackendState").style.display  = "none";
+      document.getElementById("analyticsContent").style.display = "none";
+      document.getElementById("loadingState").style.display     = "block";
+
+      try {
+        const data = await App.request("/api/analytics/predict", {
+          params: { forecast_periods: periods, target_growth: growth }
+        });
+        _lastData = data;
+        document.getElementById("loadingState").style.display    = "none";
+        document.getElementById("analyticsContent").style.display = "block";
+        renderForecast(data);
+      } catch (err) {
+        document.getElementById("loadingState").style.display   = "none";
+        document.getElementById("noBackendState").style.display = "block";
+        if (App.showToast) App.showToast(err.message || "Forecast failed.", "error");
+      }
+    }
+
+    function renderForecast(data) {
+      const summary  = data.summary || {};
+      const forecast = data.forecast || {};
+      const hist     = data.historical || {};
+
+      // Summary strip
+      document.getElementById("sumHorizon").textContent  = summary.forecast_horizon || (data.periods + " months");
+      const avgMonthly = summary.avg_monthly_sales ?? summary.avg_monthly_value ?? 0;
+      const growthLabel = summary.projected_growth || (data.target_growth + "%");
+      const avgMonthlyNum = Number(avgMonthly);
+      document.getElementById("sumAvgSales").textContent = Number.isFinite(avgMonthlyNum)
+        ? "$" + avgMonthlyNum.toLocaleString("en-US", {maximumFractionDigits:0})
+        : "—";
+      document.getElementById("sumGrowth").textContent   = growthLabel;
+      document.getElementById("sumModel").textContent = summary.model || (data.mode === "sales" ? "SalesPredictiveEngine" : "Trend + seasonality");
+      document.getElementById("datasetNameBadge").textContent = "Forecast ready";
+
+      // Chart
+      buildForecastChart(hist, forecast);
+
+      // Targets
+      const fv = forecast.values || [];
+      const projected = fv.reduce((a,b) => a+b, 0);
+      const avg = avgMonthly || 0;
+      const target = avg * (1 + (data.target_growth || 10)/100) * (data.periods || 6);
+      const diff = projected - target;
+
+      document.getElementById("tgtRevenue").textContent = "$" + Math.round(target).toLocaleString("en-US");
+      document.getElementById("tgtProjected").textContent = "$" + Math.round(projected).toLocaleString("en-US");
+
+      if (diff >= 0) {
+        document.getElementById("tgtStatus").innerHTML = '<span class="target-badge badge-green">On Track</span>';
+        document.getElementById("tgtStatusSub").textContent = "+" + Math.round(diff).toLocaleString("en-US") + " above target";
+      } else {
+        document.getElementById("tgtStatus").innerHTML = '<span class="target-badge badge-red">Below Target</span>';
+        document.getElementById("tgtStatusSub").textContent = Math.round(Math.abs(diff)).toLocaleString("en-US") + " below target";
+      }
+
+      // Table
+      buildForecastTable(forecast, avg);
+    }
+
+    function buildForecastChart(hist, forecast) {
+      if (_forecastChart) { _forecastChart.destroy(); _forecastChart = null; }
+
+      const histLabels = hist.labels || [];
+      const histVals   = hist.values || [];
+      const fcLabels   = forecast.labels || [];
+      const fcVals     = forecast.values || [];
+      const fcLower    = forecast.lower  || [];
+      const fcUpper    = forecast.upper  || [];
+
+      const allLabels = [...histLabels, ...fcLabels];
+      const histData  = [...histVals, ...Array(fcLabels.length).fill(null)];
+      const fcData    = [...Array(histLabels.length).fill(null), ...fcVals];
+      const lowerData = [...Array(histLabels.length).fill(null), ...fcLower];
+      const upperData = [...Array(histLabels.length).fill(null), ...fcUpper];
+
+      const ctx = document.getElementById("forecastChart").getContext("2d");
+      _forecastChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: allLabels,
+          datasets: [
+            {
+              label: "Historical Sales",
+              data: histData,
+              borderColor: "#8B0020",
+              borderWidth: 2.5,
+              pointBackgroundColor: "#DC2626",
+              pointRadius: 3,
+              tension: 0.3,
+              fill: false,
+            },
+            {
+              label: "Forecast",
+              data: fcData,
+              borderColor: "#818CF8",
+              borderWidth: 2.5,
+              borderDash: [6,3],
+              pointBackgroundColor: "#818CF8",
+              pointRadius: 4,
+              tension: 0.3,
+              fill: false,
+            },
+            {
+              label: "Upper Bound",
+              data: upperData,
+              borderColor: "rgba(129,140,248,0.3)",
+              borderWidth: 1,
+              borderDash: [3,3],
+              pointRadius: 0,
+              fill: "+1",
+              backgroundColor: "rgba(129,140,248,0.08)",
+            },
+            {
+              label: "Lower Bound",
+              data: lowerData,
+              borderColor: "rgba(129,140,248,0.3)",
+              borderWidth: 1,
+              borderDash: [3,3],
+              pointRadius: 0,
+              fill: false,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: "#888", font: { size: 11 } } }
+          },
+          scales: {
+            x: { grid: { color: "rgba(255,255,255,0.06)" }, ticks: { color: "#666", font: { size: 10 } } },
+            y: {
+              grid: { color: "rgba(255,255,255,0.06)" },
+              ticks: {
+                color: "#666", font: { size: 10 },
+                callback: v => "$" + new Intl.NumberFormat("en-US", { notation:"compact", maximumFractionDigits:1 }).format(v)
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function buildForecastTable(forecast, baseline) {
+      const labels = forecast.labels || [];
+      const values = forecast.values || [];
+      const lower  = forecast.lower  || [];
+      const upper  = forecast.upper  || [];
+      const tbody  = document.getElementById("forecastTableBody");
+      document.getElementById("forecastTableTitle").textContent = labels.length + " forecast periods";
+
+      if (!labels.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-hint);padding:24px;">No forecast data available</td></tr>';
+        return;
+      }
+
+      const fmt = v => "$" + Number(v).toLocaleString("en-US", { maximumFractionDigits:0 });
+      tbody.innerHTML = labels.map((label, i) => {
+        const val  = values[i] || 0;
+        const diff = baseline ? ((val - baseline) / baseline * 100) : 0;
+        const diffColor = diff >= 0 ? "#4ADE80" : "#F87171";
+        const diffStr   = (diff >= 0 ? "+" : "") + diff.toFixed(1) + "%";
+        return `<tr>
+          <td style="font-weight:600;color:var(--white);">${esc(label)}</td>
+          <td style="color:#818CF8;font-weight:700;">${fmt(val)}</td>
+          <td style="color:var(--text-hint);">${fmt(lower[i] || 0)}</td>
+          <td style="color:var(--text-hint);">${fmt(upper[i] || 0)}</td>
+          <td style="color:${diffColor};font-weight:700;">${diffStr}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    function toggleSidebar() {
+      const sb   = document.getElementById("mainSidebar");
+      const main = document.getElementById("mainContent");
+      const btn  = document.getElementById("sidebarToggleBtn");
+      const col  = sb.classList.toggle("collapsed");
+      main.classList.toggle("collapsed", col);
+      const icon = btn.querySelector(".sb-toggle-icon");
+      if (icon) icon.style.transform = col ? "rotate(180deg)" : "rotate(0deg)";
+    }
+
+    function signOut() { if (window.App) App.signOut(); }
+    function esc(v) { return String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  </script>
+</body>
+</html>

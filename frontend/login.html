@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sign In — Zero Click AI</title>
+  <meta name="description" content="Sign in to your Zero Click AI dashboard account."/>
+  <link rel="stylesheet" href="styles.css"/>
+  <style>
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px; }
+
+    /* ── Top burgundy glow ── */
+    .top-glow {
+      position:fixed; top:-200px; left:50%; transform:translateX(-50%);
+      width:700px; height:500px;
+      background:radial-gradient(ellipse, rgba(109,0,26,0.22) 0%, transparent 65%);
+      pointer-events:none; z-index:0;
+    }
+
+    .login-wrap { width:100%; max-width:400px; position:relative; z-index:1; }
+
+    /* ── Back link ── */
+    .back-link {
+      display:inline-flex; align-items:center; gap:6px;
+      font-size:12px; color:var(--text-muted); margin-bottom:22px;
+      transition:color 0.2s; cursor:pointer;
+    }
+    .back-link:hover { color:var(--white); }
+    .back-link svg { color:var(--text-hint); transition:color 0.2s; }
+    .back-link:hover svg { color:var(--white-60); }
+
+    /* ── Card ── */
+    .login-card {
+      background:var(--glass-bg-heavy); backdrop-filter:blur(32px);
+      -webkit-backdrop-filter:blur(32px);
+      border-radius:var(--r-xl); border:1px solid var(--glass-border);
+      box-shadow:
+        0 32px 80px rgba(0,0,0,0.75),
+        0 0 60px rgba(109,0,26,0.12),
+        var(--shadow-inset);
+      padding:40px 40px 32px; position:relative; overflow:hidden;
+    }
+    /* Top shimmer */
+    .login-card::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:1px;
+      background:linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 40%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0.12) 60%, transparent 100%);
+    }
+    /* Burgundy inner corner glow */
+    .login-card::after {
+      content:''; position:absolute; top:-80px; right:-80px;
+      width:240px; height:240px;
+      background:radial-gradient(circle, rgba(109,0,26,0.14) 0%, transparent 65%);
+      pointer-events:none;
+    }
+
+    /* ── Brand row ── */
+    .brand-row {
+      display:flex; align-items:center; justify-content:center;
+      gap:10px; margin-bottom:8px;
+    }
+    .brand-icon {
+      width:36px; height:36px; background:var(--grad-burg); border-radius:var(--r-xs);
+      display:flex; align-items:center; justify-content:center;
+      box-shadow: 0 0 18px rgba(109,0,26,0.55);
+    }
+    .brand-icon svg { color:white; }
+
+    .login-title { font-size:1.75rem; font-weight:900; text-align:center; letter-spacing:-0.5px; color:var(--white); margin-bottom:4px; }
+    .login-sub { font-size:10px; font-weight:700; letter-spacing:2.5px; text-transform:uppercase; color:var(--text-muted); text-align:center; }
+
+    .login-divider {
+      height:1px; border:none; margin:24px 0 22px;
+      background:linear-gradient(90deg, transparent, rgba(109,0,26,0.60), rgba(255,255,255,0.08), rgba(109,0,26,0.60), transparent);
+    }
+
+    /* ── Email row with action button ── */
+    .email-row { position:relative; }
+    .email-row .input-field { padding-right:50px; }
+
+    /* ── Submit (circle arrow) ── */
+    .circle-btn {
+      position:absolute; right:8px; top:50%; transform:translateY(-50%);
+      width:34px; height:34px; border-radius:50%;
+      background:var(--grad-burg); border:none; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      transition:all 0.22s; box-shadow: 0 0 14px rgba(109,0,26,0.55);
+    }
+    .circle-btn:hover { transform:translateY(-50%) scale(1.10); box-shadow: 0 0 28px rgba(109,0,26,0.75); }
+    .circle-btn svg { color:white; }
+
+    /* ── Full-width sign in button ── */
+    .signin-btn {
+      width:100%; background:var(--grad-burg); color:var(--white); border:none;
+      border-radius:var(--r-sm); font-family:inherit; font-size:14px; font-weight:700;
+      padding:14px; cursor:pointer; transition:all 0.22s;
+      box-shadow: 0 0 0 1px rgba(109,0,26,0.60), var(--shadow-burg);
+      display:flex; align-items:center; justify-content:center; gap:8px; margin-top:6px;
+    }
+    .signin-btn:hover {
+      background:var(--grad-burg-h);
+      box-shadow: 0 0 0 1px rgba(140,0,32,0.70), 0 0 48px rgba(109,0,26,0.60), 0 8px 32px rgba(0,0,0,0.60);
+      transform:translateY(-2px);
+    }
+    .signin-btn svg { color:white; }
+
+    /* ── Bottom links ── */
+    .bottom-link { text-align:center; margin-top:20px; font-size:12px; color:var(--text-muted); }
+    .bottom-link a { color:var(--white-60); font-weight:700; margin-left:4px; transition:color 0.2s; }
+    .bottom-link a:hover { color:var(--white); }
+  </style>
+</head>
+<body class="page-fade">
+  <div class="top-glow"></div>
+  <div class="bg-glow-br"></div>
+
+  <div class="login-wrap">
+    <a href="landing.html" class="back-link">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      Back to Home
+    </a>
+
+    <div class="login-card">
+      <!-- Brand -->
+      <div class="brand-row">
+        <div class="brand-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        </div>
+      </div>
+      <div class="login-title">Welcome back</div>
+      <div class="login-sub">Sign in to your account</div>
+
+      <hr class="login-divider"/>
+
+      <!-- Error -->
+      <div id="loginError" class="alert-error" style="display:none;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="loginErrorMsg"></span>
+      </div>
+
+      <!-- Email input with circle action -->
+      <div class="input-group">
+        <label class="input-label" for="loginEmail">Email</label>
+        <div class="email-row">
+          <input
+            type="email" id="loginEmail" class="input-field"
+            placeholder="username@company.com" autocomplete="email"
+            onkeydown="if(event.key==='Enter') revealPw()"
+          />
+          <button class="circle-btn" onclick="revealPw()" title="Continue">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Password (revealed after email) -->
+      <div class="input-group" id="pwGroup" style="display:none;">
+        <label class="input-label" for="loginPw">Password</label>
+        <input
+          type="password" id="loginPw" class="input-field"
+          placeholder="Enter your password" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter') doLogin()"
+        />
+      </div>
+
+      <!-- Sign In button -->
+      <div id="signInBtnWrap" style="display:none;">
+        <button class="signin-btn" onclick="doLogin()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Sign In
+        </button>
+      </div>
+
+    </div><!-- /.login-card -->
+
+
+    <div class="bottom-link">Don't have an account?<a href="register.html">Sign up</a></div>
+</div>
+  </div>
+
+  <script src="app.js?v=3"></script>
+  <script>
+    function revealPw() {
+      const email = document.getElementById('loginEmail').value.trim();
+      if (!email || !email.includes('@')) { showError('Please enter a valid email address.'); return; }
+      clearError();
+      document.getElementById('pwGroup').style.display = 'block';
+      document.getElementById('signInBtnWrap').style.display = 'block';
+      document.getElementById('loginPw').focus();
+    }
+
+    async function doLogin() {
+      const email = document.getElementById('loginEmail').value.trim();
+      const pw    = document.getElementById('loginPw').value;
+      if (!email) { showError('Please enter your email address.'); return; }
+      if (!pw)    { showError('Please enter your password.'); return; }
+      clearError();
+
+      if (window.App && App.hasConfiguredBackend()) {
+        try {
+          const response = await App.request('/api/auth/login', {
+            method: 'POST',
+            auth: false,
+            body: { email, password: pw }
+          });
+          App.setSession({
+            accessToken: response.access_token || response.token,
+            user: response.user || {
+              email,
+              role: response.role || (email.toLowerCase().includes('admin') ? 'Admin' : 'Viewer'),
+              name: email.split('@')[0]
+            }
+          });
+          setTimeout(() => { window.location.href = 'dashboard.html'; }, 250);
+          return;
+        } catch (error) {
+          showError(error.message || 'Backend sign in failed. Trying demo mode...');
+        }
+      }
+
+      localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('userEmail', email);
+      localStorage.setItem('userRole', email.toLowerCase().includes('admin') ? 'Admin' : 'Viewer');
+      if (window.App) {
+        App.setSession({
+          accessToken: 'demo-session',
+          user: {
+            email,
+            role: email.toLowerCase().includes('admin') ? 'Admin' : 'Viewer',
+            name: email.split('@')[0]
+          }
+        });
+      }
+      setTimeout(() => { window.location.href = 'dashboard.html'; }, 350);
+    }
+    function showError(msg) {
+      const el = document.getElementById('loginError');
+      document.getElementById('loginErrorMsg').textContent = msg;
+      el.style.display = 'flex';
+    }
+    function clearError() { document.getElementById('loginError').style.display = 'none'; }
+  </script>
+</body>
+</html>
