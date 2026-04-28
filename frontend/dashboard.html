@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard — Zero Click AI</title>
+  <meta name="description" content="Real-time AI sales analytics dashboard."/>
+  <link rel="stylesheet" href="styles.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+
+    /* ══════════════════════════════════════════════════════
+       LAYOUT
+    ══════════════════════════════════════════════════════ */
+    .dash-wrap { display:flex; min-height:100vh; padding-top:58px; overflow:hidden; }
+    .main {
+      flex:1; margin-left:230px; padding:0 28px 100px;
+      min-width:0;
+      height: calc(100vh - 58px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      transition: margin-left 0.35s cubic-bezier(0.25,0.46,0.45,0.94);
+    }
+    .main.collapsed { margin-left:56px; }
+
+    /* ══════════════════════════════════════════════════════
+       TOPBAR
+    ══════════════════════════════════════════════════════ */
+    .topbar {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:20px 0 16px; border-bottom:1px solid var(--glass-border);
+      margin-bottom:24px; gap:16px;
+    }
+    .topbar-page { font-size:18px; font-weight:700; color:var(--white); letter-spacing:-0.3px; }
+    .topbar-breadcrumb { font-size:10px; color:var(--text-hint); margin-top:3px; letter-spacing:0.5px; }
+    .topbar-breadcrumb span { color:var(--burgundy-lt); }
+    .topbar-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+    .topbar-badge {
+      display:flex; align-items:center; gap:6px;
+      font-size:10px; font-weight:700; color:var(--text-muted);
+      background:rgba(255,255,255,0.03); border:1px solid var(--glass-border);
+      border-radius:6px; padding:6px 12px;
+    }
+    .topbar-badge .live-dot {
+      width:6px; height:6px; border-radius:50%; background:#4ADE80;
+      box-shadow:0 0 6px #4ADE80; flex-shrink:0;
+    }
+    .topbar-badge .live-dot.demo { background:#D97706; box-shadow:0 0 6px #D97706; }
+
+    /* ── Report dropdown ── */
+    .report-wrap { position:relative; }
+    .report-btn {
+      display:flex; align-items:center; gap:7px;
+      background:rgba(109,0,26,0.18); border:1px solid rgba(109,0,26,0.45);
+      border-radius:6px; padding:8px 14px; color:#FF6B6B;
+      font-size:11px; font-weight:700; font-family:inherit; cursor:pointer;
+      transition:all 0.2s;
+    }
+    .report-btn:hover { background:rgba(109,0,26,0.35); transform:translateY(-1px); }
+    .report-dropdown {
+      display:none; position:absolute; right:0; top:calc(100% + 8px);
+      background:var(--glass-bg-heavy); border:1px solid var(--glass-border);
+      border-radius:var(--r-sm); padding:8px; min-width:200px;
+      box-shadow:0 16px 48px rgba(0,0,0,0.6); z-index:100;
+    }
+    .report-dropdown.open { display:block; }
+    .report-item {
+      display:flex; align-items:center; gap:9px;
+      padding:9px 12px; border-radius:5px; font-size:12px; font-weight:600;
+      color:var(--text-secondary); cursor:pointer; transition:background 0.15s;
+      border:none; background:transparent; font-family:inherit; width:100%; text-align:left;
+    }
+    .report-item:hover { background:rgba(109,0,26,0.15); color:var(--white); }
+    .report-item svg { color:var(--burgundy-lt); flex-shrink:0; }
+
+    /* ══════════════════════════════════════════════════════
+       SECTION HEADER
+    ══════════════════════════════════════════════════════ */
+    .sec-hdr {
+      display:flex; align-items:center; gap:8px;
+      font-size:9px; font-weight:700; letter-spacing:2.5px;
+      text-transform:uppercase; color:var(--text-hint);
+      margin:0 0 14px 0;
+    }
+    .sec-hdr::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,rgba(109,0,26,0.5),transparent); }
+    .sec-hdr svg { color:var(--burgundy-lt); flex-shrink:0; }
+    .sec-sub { font-size:9px; color:var(--text-hint); font-weight:400; text-transform:none; letter-spacing:0; margin-left:4px; }
+
+    /* ══════════════════════════════════════════════════════
+       KPI CARDS
+    ══════════════════════════════════════════════════════ */
+    .kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px; }
+
+    /* ══════════════════════════════════════════════════════
+       AI INSIGHT BANNER
+    ══════════════════════════════════════════════════════ */
+    .insight-banner {
+      background:rgba(109,0,26,0.06); border:1px solid rgba(109,0,26,0.22);
+      border-radius:var(--r-md); padding:14px 18px; margin-bottom:24px;
+      position:relative; overflow:hidden;
+    }
+    .insight-banner::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:2px;
+      background:linear-gradient(90deg,transparent,var(--burgundy),var(--burgundy-lt),var(--burgundy),transparent);
+    }
+    .insight-banner-label {
+      font-size:8px; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+      color:var(--burgundy-lt); margin-bottom:8px; display:flex; align-items:center; gap:6px;
+    }
+    .insight-chips { display:flex; flex-wrap:wrap; gap:6px; }
+    .insight-chip {
+      font-size:10px; padding:4px 10px; border-radius:20px; font-weight:600;
+      line-height:1.4;
+    }
+    .chip-green  { background:rgba(74,222,128,0.10);  color:#4ADE80;  border:1px solid rgba(74,222,128,0.22); }
+    .chip-grey   { background:rgba(156,163,175,0.10); color:#9CA3AF;  border:1px solid rgba(156,163,175,0.22); }
+    .chip-amber  { background:rgba(217,119,6,0.10);   color:#D97706;  border:1px solid rgba(217,119,6,0.22); }
+    .chip-red    { background:rgba(220,38,38,0.10);   color:#F87171;  border:1px solid rgba(220,38,38,0.22); }
+    .chip-purple { background:rgba(129,140,248,0.10); color:#818CF8;  border:1px solid rgba(129,140,248,0.22); }
+
+    /* Groq AI chip loading state */
+    .chip-ai-loading { opacity:0.5; font-style:italic; }
+
+    /* ══════════════════════════════════════════════════════
+       CHART AREA — asymmetric splits
+    ══════════════════════════════════════════════════════ */
+    .chart-split-lg { display:grid; grid-template-columns:1.6fr 1fr; gap:14px; margin-bottom:14px; }
+    .chart-split-eq { display:grid; grid-template-columns:1.4fr 1fr; gap:14px; margin-bottom:24px; }
+    @media(max-width:900px){
+      .chart-split-lg, .chart-split-eq { grid-template-columns:1fr; }
+    }
+    .chart-h-lg { height:260px; position:relative; }
+    .chart-h-sm { height:260px; position:relative; }
+    .chart-h-full { height:240px; position:relative; margin-top:12px; }
+
+    /* ══════════════════════════════════════════════════════
+       RECOMMENDATIONS
+    ══════════════════════════════════════════════════════ */
+    .rec-list { display:flex; flex-direction:column; gap:8px; }
+    .rec-item {
+      background:rgba(255,255,255,0.03); border:1px solid var(--glass-border);
+      border-radius:6px; padding:10px 12px;
+      font-size:11px; color:var(--text-secondary); line-height:1.55;
+      display:flex; align-items:flex-start; gap:8px;
+      transition:border-color 0.18s;
+    }
+    .rec-item:hover { border-color:rgba(109,0,26,0.35); }
+    .rec-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+
+    /* ══════════════════════════════════════════════════════
+       DATA TABLE
+    ══════════════════════════════════════════════════════ */
+    .table-wrap {
+      background:var(--glass-bg); backdrop-filter:blur(24px);
+      border:1px solid var(--glass-border); border-radius:var(--r-md);
+      overflow:hidden; margin-bottom:24px; box-shadow:var(--shadow-card);
+    }
+    .table-top {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:14px 18px; border-bottom:1px solid var(--glass-border);
+    }
+    .table-top-title { font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-muted); }
+    .table-scroll { overflow-x:auto; }
+
+    /* ══════════════════════════════════════════════════════
+       UPLOAD + CONNECTION CARDS
+    ══════════════════════════════════════════════════════ */
+    .ops-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:24px; }
+    @media(max-width:700px){ .ops-grid { grid-template-columns:1fr; } }
+
+    /* ══════════════════════════════════════════════════════
+       DOWNLOAD ROW
+    ══════════════════════════════════════════════════════ */
+    .dl-row { display:flex; gap:10px; flex-wrap:wrap; }
+    .dl-btn {
+      display:flex; align-items:center; gap:8px;
+      background:rgba(109,0,26,0.60); border:1px solid var(--burgundy-border);
+      backdrop-filter:blur(12px); border-radius:var(--r-xs);
+      padding:10px 18px; color:#FF6B6B;
+      font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; transition:all 0.2s;
+    }
+    .dl-btn:hover { background:rgba(109,0,26,0.80); transform:translateY(-2px); box-shadow:0 0 20px rgba(109,0,26,0.25); }
+    .dl-btn-outline {
+      display:flex; align-items:center; gap:8px;
+      background:rgba(255,255,255,0.05); border:1px solid var(--glass-border);
+      backdrop-filter:blur(12px); border-radius:var(--r-xs);
+      padding:10px 18px; color:var(--text-secondary);
+      font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; transition:all 0.2s;
+    }
+    .dl-btn-outline:hover { background:rgba(255,255,255,0.12); border-color:var(--glass-border-hover); transform:translateY(-2px); }
+
+    /* ══════════════════════════════════════════════════════
+       SIDEBAR
+    ══════════════════════════════════════════════════════ */
+    .sb-logo {
+      width:34px; height:34px; border-radius:8px; flex-shrink:0;
+      background:linear-gradient(135deg,#6D001A,#3D000E);
+      border:1px solid rgba(109,0,26,0.60);
+      display:flex; align-items:center; justify-content:center;
+      box-shadow:0 0 16px rgba(109,0,26,0.40);
+    }
+    .sb-brand-name { font-size:13px; font-weight:800; letter-spacing:-0.3px; color:var(--white); line-height:1.2; }
+    .sb-brand-sub  { font-size:9px; font-weight:600; letter-spacing:2px; text-transform:uppercase; color:var(--text-hint); margin-top:1px; }
+    .sb-divider    { height:1px; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.08),transparent); margin:12px 0; }
+    .sb-section {
+      font-size:8px; font-weight:700; letter-spacing:2.5px; text-transform:uppercase;
+      color:var(--text-hint); padding:0 2px; margin:16px 0 8px;
+      display:flex; align-items:center; gap:8px;
+    }
+    .sb-section::after { content:''; flex:1; height:1px; background:rgba(255,255,255,0.04); }
+    .sb-filter-block { margin-bottom:10px; position:relative; }
+    .sb-filter-label {
+      display:flex; align-items:center; gap:7px;
+      font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase;
+      color:var(--text-muted); margin-bottom:5px; padding:0 2px;
+    }
+    .sb-filter-label svg { color:var(--burgundy-lt); opacity:0.8; flex-shrink:0; }
+    .sb-filter-label .sb-filter-dot {
+      width:5px; height:5px; border-radius:50%; background:rgba(109,0,26,0.80);
+      margin-left:auto; transition:background 0.2s;
+    }
+    .sb-filter-label .sb-filter-dot.active { background:#DC2626; box-shadow:0 0 6px #DC2626; }
+    .sb-select {
+      width:100%; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);
+      border-radius:6px; color:var(--text-secondary); font-size:12px; font-family:inherit;
+      padding:9px 30px 9px 10px; outline:none; cursor:pointer; transition:border-color 0.2s, background 0.2s;
+      appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 10px center;
+    }
+    .sb-select:focus { border-color:rgba(109,0,26,0.60); background:rgba(109,0,26,0.05); }
+    .sb-select:hover { border-color:rgba(255,255,255,0.15); }
+    option { background:#111; color:#ddd; }
+    .sb-reset-btn {
+      width:100%; display:flex; align-items:center; justify-content:center; gap:8px;
+      background:rgba(109,0,26,0.15); border:1px solid rgba(109,0,26,0.35);
+      border-radius:6px; padding:9px 14px; margin-top:4px;
+      font-size:11px; font-weight:700; letter-spacing:0.5px; color:#FF6B6B;
+      font-family:inherit; cursor:pointer; transition:all 0.2s;
+    }
+    .sb-reset-btn:hover { background:rgba(109,0,26,0.35); border-color:rgba(109,0,26,0.65); transform:translateY(-1px); }
+    .sb-stats { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:2px; }
+    .sb-stat-item {
+      background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06);
+      border-radius:6px; padding:8px 10px; text-align:center;
+    }
+    .sb-stat-val { font-size:14px; font-weight:800; color:var(--white); line-height:1.2; }
+    .sb-stat-lbl { font-size:8px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--text-hint); margin-top:2px; }
+    .sb-user {
+      display:flex; align-items:center; gap:10px;
+      background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.07);
+      border-radius:8px; padding:10px 12px;
+    }
+    .sb-avatar {
+      width:32px; height:32px; border-radius:50%; flex-shrink:0;
+      background:linear-gradient(135deg,#6D001A,#3D000E); border:1px solid rgba(109,0,26,0.50);
+      display:flex; align-items:center; justify-content:center;
+      font-size:13px; font-weight:800; color:rgba(255,255,255,0.90);
+    }
+    .sb-user-name  { font-size:12px; font-weight:700; color:var(--white); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .sb-user-role  { font-size:9px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:#FF6B6B; margin-top:1px; }
+    .sidebar.collapsed .sb-hide { display:none !important; }
+    .sidebar.collapsed .sb-header { justify-content:center; }
+    .sidebar.collapsed .sb-reset-btn span { display:none; }
+    .sidebar.collapsed .sb-reset-btn { padding:9px; }
+    .sidebar.collapsed .sb-divider { margin:8px 0; }
+    .sb-tip {
+      position:absolute; left:calc(100% + 12px); top:50%; transform:translateY(-50%);
+      background:#1c1c1c; border:1px solid rgba(255,255,255,0.12);
+      color:var(--white); font-size:11px; font-weight:600;
+      padding:5px 10px; border-radius:5px; white-space:nowrap;
+      pointer-events:none; opacity:0; transition:opacity 0.15s;
+      z-index:999; box-shadow:0 4px 12px rgba(0,0,0,0.5);
+    }
+    .sidebar.collapsed .sb-filter-block:hover .sb-tip { opacity:1; }
+    .sb-toggle-icon { transition:transform 0.35s cubic-bezier(0.25,0.46,0.45,0.94); }
+    .burg-hr { height:1px; border:none; background:linear-gradient(90deg,transparent,rgba(109,0,26,0.60),rgba(109,0,26,0.60),transparent); margin:24px 0; }
+
+    /* ══════════════════════════════════════════════════════
+       CHAT
+    ══════════════════════════════════════════════════════ */
+    .chat-voice {
+      width:32px; height:32px; border-radius:8px; flex-shrink:0;
+      background:rgba(109,0,26,0.12); border:1px solid rgba(109,0,26,0.3);
+      color:var(--text-muted); cursor:pointer; display:flex;
+      align-items:center; justify-content:center; transition:all 0.18s;
+    }
+    .chat-voice:hover { background:rgba(109,0,26,0.25); color:var(--burgundy-lt); }
+    .chat-voice.recording { background:rgba(220,38,38,0.2); border-color:#DC2626; color:#DC2626; animation:pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{ box-shadow:0 0 0 0 rgba(220,38,38,0.4); } 50%{ box-shadow:0 0 0 6px rgba(220,38,38,0); } }
+    #emailModal.open { display:flex !important; }
+  </style>
+</head>
+<body class="page-fade">
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-brand">
+      <button id="sidebarToggleBtn" onclick="toggleSidebar()" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;margin-right:12px;display:flex;align-items:center;padding:6px;border-radius:4px;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'" title="Toggle Sidebar">
+        <svg class="sb-toggle-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+      </button>
+      <div class="nav-brand-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      </div>
+      Zero Click<span style="font-weight:300;color:var(--text-muted);">AI</span>
+    </div>
+    <div class="nav-links">
+      <span id="navRoleBadge" class="badge badge-burg" style="margin-right:8px;">Admin</span>
+      <a href="landing.html" class="nav-link">Home</a>
+      <a href="team.html" class="nav-link">Team</a>
+      <button onclick="signOut()" class="btn btn-ghost btn-sm">Sign Out</button>
+    </div>
+  </nav>
+
+  <div class="dash-wrap">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="mainSidebar">
+      <div class="sb-header" style="display:flex;align-items:center;gap:10px;padding:2px 4px 16px;">
+        <div class="sb-logo">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        </div>
+        <div class="sb-hide">
+          <div class="sb-brand-name">Zero Click AI</div>
+          <div class="sb-brand-sub">Sales Dashboard</div>
+        </div>
+      </div>
+      <div class="sb-divider"></div>
+
+      <!-- Dataset stats -->
+      <div class="sb-hide">
+        <div class="sb-section">Dataset</div>
+        <div class="sb-stats">
+          <div class="sb-stat-item">
+            <div class="sb-stat-val" id="sbStatRows">—</div>
+            <div class="sb-stat-lbl">Records</div>
+          </div>
+          <div class="sb-stat-item">
+            <div class="sb-stat-val" id="sbStatYears">—</div>
+            <div class="sb-stat-lbl">Years</div>
+          </div>
+        </div>
+      </div>
+      <div class="sb-divider sb-hide"></div>
+
+      <!-- Filters -->
+      <div class="sb-section sb-hide">Filters</div>
+
+      <div class="sb-filter-block">
+        <span class="sb-tip">Category</span>
+        <div class="sb-filter-label sb-hide">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Category
+          <span class="sb-filter-dot" id="dotCat"></span>
+        </div>
+        <select class="sb-select sb-hide" id="fCat"><option value="All">All Categories</option></select>
+        <div class="sb-collapsed-icon" style="display:none;padding:9px;cursor:pointer;border-radius:6px;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#909090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </div>
+      </div>
+
+      <div class="sb-filter-block" style="margin-top:2px;">
+        <span class="sb-tip">Region</span>
+        <div class="sb-filter-label sb-hide">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Region
+          <span class="sb-filter-dot" id="dotRegion"></span>
+        </div>
+        <select class="sb-select sb-hide" id="fRegion"><option value="All">All Regions</option></select>
+        <div class="sb-collapsed-icon" style="display:none;padding:9px;cursor:pointer;border-radius:6px;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#909090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+      </div>
+
+      <div class="sb-filter-block" style="margin-top:2px;">
+        <span class="sb-tip">Profit Status</span>
+        <div class="sb-filter-label sb-hide">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+          Profit Status
+          <span class="sb-filter-dot" id="dotProfit"></span>
+        </div>
+        <select class="sb-select sb-hide" id="fProfit">
+          <option value="All">All</option>
+          <option value="Profitable">Profitable Only</option>
+          <option value="Loss Making">Loss Making</option>
+        </select>
+        <div class="sb-collapsed-icon" style="display:none;padding:9px;cursor:pointer;border-radius:6px;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#909090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+        </div>
+      </div>
+
+      <div class="sb-filter-block" style="margin-top:2px;">
+        <span class="sb-tip">Year</span>
+        <div class="sb-filter-label sb-hide">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Year
+          <span class="sb-filter-dot" id="dotYear"></span>
+        </div>
+        <select class="sb-select sb-hide" id="fYear"><option value="All">All Years</option></select>
+        <div class="sb-collapsed-icon" style="display:none;padding:9px;cursor:pointer;border-radius:6px;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#909090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+      </div>
+
+      <button class="sb-reset-btn" id="sbResetBtn" style="margin-top:10px;" title="Reset all filters">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+        <span>Reset Filters</span>
+      </button>
+
+      <div class="sb-divider" style="margin-top:8px;"></div>
+      <div class="sb-section sb-hide" style="font-size:8px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--text-hint);padding:0 2px;margin:16px 0 8px;display:flex;align-items:center;gap:8px;">Analytics</div>
+      <a href="profiling.html" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text-muted);text-decoration:none;transition:all .18s;" class="sb-hide" onmouseover="this.style.background='var(--white-06)';this.style.color='var(--white)'" onmouseout="this.style.background='';this.style.color='var(--text-muted)'">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Dataset Profiling
+      </a>
+      <a href="quality.html" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text-muted);text-decoration:none;transition:all .18s;" class="sb-hide" onmouseover="this.style.background='var(--white-06)';this.style.color='var(--white)'" onmouseout="this.style.background='';this.style.color='var(--text-muted)'">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Data Quality
+      </a>
+      <a href="analytics.html" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text-muted);text-decoration:none;transition:all .18s;" class="sb-hide" onmouseover="this.style.background='var(--white-06)';this.style.color='var(--white)'" onmouseout="this.style.background='';this.style.color='var(--text-muted)'">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+        Predictive Analytics
+      </a>
+      <a href="users.html" id="usersNavLink" style="display:none;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text-muted);text-decoration:none;transition:all .18s;" class="sb-hide" onmouseover="this.style.background='var(--white-06)';this.style.color='var(--white)'" onmouseout="this.style.background='';this.style.color='var(--text-muted)'">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        User Management
+      </a>
+      <div class="sb-divider" style="margin-top:14px;"></div>
+
+      <div class="sb-user sb-hide">
+        <div class="sb-avatar" id="sbAvatar">A</div>
+        <div class="sb-user-info">
+          <div class="sb-user-name" id="sbUserName">Admin User</div>
+          <div class="sb-user-role" id="sbUserRole">Admin</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:center;" class="sb-collapsed-icon">
+        <div class="sb-avatar" id="sbAvatarCollapsed" style="cursor:default;">A</div>
+      </div>
+
+      <div class="sb-divider sb-hide"></div>
+      <div class="sb-hide" style="padding:0 2px;">
+        <div style="font-size:8px;color:var(--text-hint);letter-spacing:0.5px;line-height:1.8;text-align:center;">
+          Zero Click AI · v2.0
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+
+      <!-- ── TOPBAR ── -->
+      <div class="topbar">
+        <div class="topbar-left">
+          <div class="topbar-page">Sales Analytics Dashboard</div>
+          <div class="topbar-breadcrumb">Home › <span>Dashboard</span> &nbsp;·&nbsp; <span id="topbarDatasetName">No dataset loaded</span></div>
+        </div>
+        <div class="topbar-right">
+          <div class="topbar-badge">
+            <span class="live-dot demo" id="liveIndicatorDot"></span>
+            <span id="liveIndicatorText">Demo Mode</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-hint);">Updated: <span id="lastUpdatedText" style="color:var(--text-muted);">—</span></div>
+          <button type="button" class="dl-btn-outline" id="refreshNowBtn" style="padding:7px 12px;font-size:11px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+            Refresh
+          </button>
+          <!-- Report dropdown -->
+          <div class="report-wrap">
+            <button class="report-btn" onclick="document.getElementById('reportDropdown').classList.toggle('open')">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Report
+            </button>
+            <div class="report-dropdown" id="reportDropdown">
+              <button class="report-item" onclick="downloadPDF()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Download PDF Report
+              </button>
+              <button class="report-item" onclick="downloadExcel()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Download Excel Report
+              </button>
+              <div style="height:1px;background:var(--glass-border);margin:4px 0;"></div>
+              <button class="report-item" id="exportFilteredBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Export Filtered CSV
+              </button>
+              <button class="report-item" id="downloadSummaryBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Export Summary JSON
+              </button>
+              <div style="height:1px;background:var(--glass-border);margin:4px 0;"></div>
+              <button class="report-item" onclick="toggleEmailModal()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                Email Scheduler
+              </button>
+            </div>
+          </div>
+          </div>
+      </div>
+
+      <!-- ── DATA OPERATIONS (Upload + Connection) ── -->
+      <div class="ops-grid">
+        <div class="chart-card">
+          <div class="chart-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload Dataset
+          </div>
+          <form id="uploadForm" style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">
+            <input id="uploadInput" type="file" accept=".csv,.xls,.xlsx,.json" class="input-field" style="min-height:40px;padding:9px 12px;"/>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+              <span class="badge badge-white" id="uploadFileName">No file selected</span>
+              <button type="submit" class="dl-btn" style="padding:8px 16px;font-size:11px;">Upload and Refresh</button>
+            </div>
+            <div id="uploadWarnings" style="display:none;font-size:11px;line-height:1.5;color:var(--text-secondary);"></div>
+          </form>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+            Live Connection
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <span class="badge badge-burg" id="backendModeBadge">Demo Mode</span>
+              <span class="badge badge-white" id="activeDatasetName">Local demo dataset</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-secondary);">Dataset: <span id="activeDatasetRows" style="color:var(--text-muted);">—</span> rows</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── KPIs ── -->
+      <div class="sec-hdr">
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Key Performance Indicators
+        <span class="sec-sub">Dynamic metrics from your dataset</span>
+      </div>
+      <div class="kpi-row" id="kpiRow1"></div>
+      <div class="kpi-row" id="kpiRow2" style="margin-bottom:24px;"></div>
+
+      <div class="burg-hr"></div>
+
+      <!-- ── AI INSIGHT BANNER ── -->
+      <div class="sec-hdr">
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        AI Insight Generator
+        <span class="sec-sub">Groq LLaMA · rule-based fallback</span>
+      </div>
+      <div class="insight-banner">
+        <div class="insight-banner-label">
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Live insights from filtered data
+        </div>
+        <div class="insight-chips">
+          <span class="insight-chip chip-green"  id="insightChip0" style="color:var(--text-hint)">Calculating...</span>
+          <span class="insight-chip chip-grey"   id="insightChip1" style="color:var(--text-hint)">Calculating...</span>
+          <span class="insight-chip chip-amber"  id="insightChip2" style="color:var(--text-hint)">Calculating...</span>
+          <span class="insight-chip chip-red"    id="insightChip3" style="color:var(--text-hint)">Calculating...</span>
+          <span class="insight-chip chip-purple chip-ai-loading" id="insightChipAI">Connecting to Groq AI...</span>
+        </div>
+      </div>
+
+      <!-- ── CHARTS ROW 1: Revenue vs Profit [1.6] | Category Donut [1] ── -->
+      <div class="sec-hdr">
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span id="chartSectionTitle">Sales and Profit Analysis</span>
+      </div>
+      <div class="chart-split-lg">
+        <div class="chart-card">
+          <div class="chart-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <span id="chartMonthlyTitle">Monthly Sales Trend</span>
+          </div>
+          <div class="chart-h-lg"><canvas id="chartMonthly"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            <span id="chartCatTitle">Sales by Category</span>
+          </div>
+          <div class="chart-h-sm"><canvas id="chartCat"></canvas></div>
+        </div>
+      </div>
+
+      <!-- ── CHARTS ROW 2: Top Products [1.4] | Smart Recommendations [1] ── -->
+      <div class="chart-split-eq">
+        <div>
+          <div class="chart-card">
+            <div class="chart-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              <span id="chartProductsTitle">Top 5 Products by Sales</span>
+            </div>
+            <div class="chart-h-sm"><canvas id="chartProducts"></canvas></div>
+          </div>
+          <div class="chart-card" style="margin-top:0;">
+            <div class="chart-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/></svg>
+              <span id="chartRegionTitle">Sales by Region</span>
+            </div>
+            <div class="chart-h-full"><canvas id="chartRegion"></canvas></div>
+          </div>
+        </div>
+        <div class="chart-card" style="display:flex;flex-direction:column;">
+          <div class="chart-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            Smart Recommendations
+          </div>
+          <div class="rec-list" id="recList" style="margin-top:12px;">
+            <div class="rec-item"><span class="rec-dot" style="background:#DC2626;"></span><span style="color:var(--text-hint)">Loading recommendations...</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="burg-hr"></div>
+
+      <!-- ── ADVANCED VISUALS: Dotted Scatter + Heatmap ── -->
+      <div class="sec-hdr">
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Advanced Visual Analytics
+      </div>
+      <div class="chart-split-eq">
+        <div class="chart-card">
+          <div class="chart-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="14" r="2"/><circle cx="12" cy="9" r="2"/><circle cx="17" cy="16" r="2"/></svg>
+            Dotted Profit vs Sales Graph
+          </div>
+          <div class="chart-h-sm"><canvas id="chartScatter"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="6"/><rect x="9" y="3" width="6" height="6"/><rect x="15" y="3" width="6" height="6"/><rect x="3" y="9" width="6" height="6"/><rect x="9" y="9" width="6" height="6"/><rect x="15" y="9" width="6" height="6"/></svg>
+            Regional Monthly Heatmap
+          </div>
+          <div class="chart-h-sm"><canvas id="chartHeatmap"></canvas></div>
+        </div>
+      </div>
+
+      <div class="burg-hr"></div>
+
+      <!-- ── DATA TABLE ── -->
+      <div class="sec-hdr">
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Detailed Data View
+      </div>
+      <div class="table-wrap">
+        <div class="table-top">
+          <div class="table-top-title" id="tableTitleText">Showing records — current filter selection</div>
+          <span class="badge badge-burg" id="tableStatusBadge">Live Data</span>
+        </div>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead id="tableHead">
+              <tr>
+                <th>Region</th><th>Category</th><th>Sub-Category</th>
+                <th>Product Name</th><th>Sales</th><th>Profit</th>
+                <th>Qty</th><th>Discount</th><th>Order Date</th>
+              </tr>
+            </thead>
+            <tbody id="tBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Floating Chat FAB -->
+  <button class="chat-fab" id="chatFab" onclick="toggleChat()">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    AI Assistant
+  </button>
+
+  <!-- Chat Panel -->
+  <div class="chat-panel" id="chatPanel">
+    <div class="chat-header">
+      <div class="chat-header-left">
+        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span id="chatHeaderTitle">AI Sales Assistant</span>
+      </div>
+      <button class="chat-close" onclick="toggleChat()">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="chat-messages" id="chatMsgs">
+      <div class="msg msg-bot">Hello. I am your AI Sales Assistant.<br>Ask me anything about the sales data.</div>
+    </div>
+    <div class="chat-quick" id="quickTags"></div>
+    <div class="chat-input-row">
+      <button class="chat-voice" id="voiceBtn" title="Voice input" aria-label="Voice input">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </button>
+      <input class="chat-input" id="chatInput" placeholder="Ask about this dataset..." onkeydown="if(event.key==='Enter')sendMsg()"/>
+      <button class="chat-send" onclick="sendMsg()">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Email Scheduler Modal -->
+  <div id="emailModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:500;display:none;align-items:center;justify-content:center;">
+    <div style="background:var(--glass-bg-heavy);border:1px solid var(--glass-border);border-radius:var(--r-xl);padding:28px;width:440px;max-width:calc(100vw - 40px);position:relative;box-shadow:0 32px 80px rgba(0,0,0,0.75);">
+      <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent);border-radius:var(--r-xl) var(--r-xl) 0 0;"></div>
+      <button onclick="toggleEmailModal()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:4px;line-height:1;" onmouseover="this.style.color='var(--white)'" onmouseout="this.style.color='var(--text-muted)'">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <div style="font-size:15px;font-weight:800;color:var(--white);margin-bottom:20px;display:flex;align-items:center;gap:9px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--burgundy-lt)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        Email Scheduler
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px;">
+        <div>
+          <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px;">Recipient Email</div>
+          <input type="email" id="scheduleEmail" class="input-field" placeholder="recipient@company.com" style="padding:9px 12px;"/>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+          <div>
+            <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px;">Frequency</div>
+            <select id="scheduleFreq" class="input-field" style="padding:9px 12px;">
+              <option value="Daily">Daily</option>
+              <option value="Weekly">Weekly</option>
+              <option value="Monthly">Monthly</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px;">Format</div>
+            <select id="scheduleFormat" class="input-field" style="padding:9px 12px;">
+              <option value="full">Full Report</option>
+              <option value="summary">Summary</option>
+              <option value="dashboard">Dashboard</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px;">Send Time</div>
+            <input type="time" id="scheduleTime" class="input-field" value="09:00" style="padding:9px 12px;"/>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:20px;">
+        <button onclick="createEmailSchedule()" class="dl-btn" style="flex:1;justify-content:center;padding:9px 14px;font-size:11px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Schedule
+        </button>
+        <button onclick="sendReportNow()" class="dl-btn-outline" style="flex:1;padding:9px 14px;font-size:11px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Send Now
+        </button>
+      </div>
+      <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-hint);margin-bottom:10px;">Active Schedules</div>
+      <div id="emailStatusNote" style="font-size:11px;color:var(--text-hint);margin-bottom:10px;">Checking email status...</div>
+      <div id="emailScheduleList" style="max-height:160px;overflow-y:auto;">
+        <div style="color:var(--text-hint);font-size:12px;padding:4px 0;">No schedules loaded.</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=3"></script>
+  <script src="dashboard.js"></script>
+  <script>
+    /* Close report dropdown on outside click */
+    document.addEventListener("click", function(e) {
+      const wrap = document.querySelector(".report-wrap");
+      if (wrap && !wrap.contains(e.target)) {
+        const dd = document.getElementById("reportDropdown");
+        if (dd) dd.classList.remove("open");
+      }
+    });
+  </script>
+</body>
+</html>

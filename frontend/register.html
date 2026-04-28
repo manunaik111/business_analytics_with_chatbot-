@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Create Account — Zero Click AI</title>
+  <meta name="description" content="Create a free Viewer account for Zero Click AI."/>
+  <link rel="stylesheet" href="styles.css"/>
+  <style>
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px; }
+
+    .top-glow {
+      position:fixed; top:-200px; left:50%; transform:translateX(-50%);
+      width:660px; height:480px;
+      background:radial-gradient(ellipse, rgba(109,0,26,0.18) 0%, transparent 65%);
+      pointer-events:none; z-index:0;
+    }
+
+    .reg-wrap { width:100%; max-width:440px; position:relative; z-index:1; }
+
+    .back-link {
+      display:inline-flex; align-items:center; gap:6px;
+      font-size:12px; color:var(--text-muted); margin-bottom:22px; transition:color 0.2s;
+    }
+    .back-link:hover { color:var(--white); }
+    .back-link svg { color:var(--text-hint); transition:color 0.2s; }
+    .back-link:hover svg { color:var(--white-60); }
+
+    /* ── Card ── */
+    .reg-card {
+      background:var(--glass-bg-heavy); backdrop-filter:blur(32px);
+      -webkit-backdrop-filter:blur(32px);
+      border-radius:var(--r-xl); border:1px solid var(--glass-border);
+      box-shadow: 0 32px 80px rgba(0,0,0,0.75), 0 0 60px rgba(109,0,26,0.10), var(--shadow-inset);
+      padding:40px 40px 32px; position:relative; overflow:hidden;
+    }
+    .reg-card::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:1px;
+      background:linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 40%, rgba(255,255,255,0.20) 50%, rgba(255,255,255,0.12) 60%, transparent 100%);
+    }
+
+    .brand-row { display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:8px; }
+    .brand-icon { width:36px; height:36px; background:var(--grad-burg); border-radius:var(--r-xs); display:flex; align-items:center; justify-content:center; box-shadow: 0 0 18px rgba(109,0,26,0.55); }
+    .brand-icon svg { color:white; }
+
+    .reg-title { font-size:1.65rem; font-weight:900; text-align:center; letter-spacing:-0.5px; color:var(--white); margin-bottom:4px; }
+    .reg-sub   { font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--text-muted); text-align:center; }
+    .reg-divider { height:1px; border:none; margin:22px 0 20px; background:linear-gradient(90deg, transparent, rgba(109,0,26,0.55), rgba(255,255,255,0.06), rgba(109,0,26,0.55), transparent); }
+
+    /* ── Register button ── */
+    .reg-btn {
+      width:100%; background:var(--grad-burg); color:var(--white); border:none;
+      border-radius:var(--r-sm); font-family:inherit; font-size:14px; font-weight:700;
+      padding:14px; cursor:pointer; transition:all 0.22s; margin-top:8px;
+      box-shadow: 0 0 0 1px rgba(109,0,26,0.60), var(--shadow-burg);
+      display:flex; align-items:center; justify-content:center; gap:8px;
+    }
+    .reg-btn:hover {
+      background:var(--grad-burg-h);
+      box-shadow: 0 0 0 1px rgba(140,0,32,0.70), 0 0 48px rgba(109,0,26,0.60), 0 8px 32px rgba(0,0,0,0.60);
+      transform:translateY(-2px);
+    }
+    .reg-btn svg { color:white; }
+
+    .bottom-link { text-align:center; margin-top:20px; font-size:12px; color:var(--text-muted); }
+    .bottom-link a { color:var(--white-60); font-weight:700; margin-left:4px; transition:color 0.2s; }
+    .bottom-link a:hover { color:var(--white); }
+
+    .match-hint { font-size:10px; font-weight:700; letter-spacing:0.5px; margin-top:-6px; margin-bottom:10px; display:flex; align-items:center; gap:5px; }
+  </style>
+</head>
+<body class="page-fade">
+  <div class="top-glow"></div>
+  <div class="bg-glow-br"></div>
+
+  <div class="reg-wrap">
+    <a href="login.html" class="back-link">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      Back to Sign In
+    </a>
+
+    <div class="reg-card">
+      <!-- Brand -->
+      <div class="brand-row">
+        <div class="brand-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        </div>
+      </div>
+      <div class="reg-title">Create Account</div>
+      <div class="reg-sub">Viewer Access &nbsp;·&nbsp; Zero Click AI</div>
+      <hr class="reg-divider"/>
+
+      <!-- Alerts -->
+      <div id="regError" class="alert-error" style="display:none;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="regErrMsg"></span>
+      </div>
+      <div id="regSuccess" class="alert-success" style="display:none;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <span id="regSuccessMsg"></span>
+      </div>
+
+      <!-- Viewer notice -->
+      <div class="viewer-notice">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted);flex-shrink:0;margin-top:1px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span>Self-registered accounts are granted <b>Viewer</b> access only — read-only dashboard. Contact an admin to upgrade your role.</span>
+      </div>
+
+      <!-- Full Name -->
+      <div class="input-group">
+        <label class="input-label" for="fullName">Full Name</label>
+        <input type="text" id="fullName" class="input-field" placeholder="Jane Doe" autocomplete="name"/>
+      </div>
+
+      <!-- Email -->
+      <div class="input-group">
+        <label class="input-label" for="regEmail">Email Address</label>
+        <input type="email" id="regEmail" class="input-field" placeholder="you@company.com" autocomplete="email"/>
+      </div>
+
+      <!-- Password -->
+      <div class="input-group">
+        <label class="input-label" for="regPw">Password</label>
+        <input type="password" id="regPw" class="input-field" placeholder="Min 8 characters" oninput="updateStrength(this.value)"/>
+        <!-- Strength bar -->
+        <div id="strengthWrap" style="display:none; margin-top:8px;">
+          <div class="pw-strength-track">
+            <div class="pw-strength-fill" id="strengthFill"></div>
+          </div>
+          <span class="pw-strength-label" id="strengthLabel"></span>
+        </div>
+      </div>
+
+      <!-- Confirm Password -->
+      <div class="input-group">
+        <label class="input-label" for="regPw2">Confirm Password</label>
+        <input type="password" id="regPw2" class="input-field" placeholder="Repeat your password"
+               oninput="checkMatch()" onkeydown="if(event.key==='Enter') doRegister()"/>
+        <div class="match-hint" id="matchHint" style="display:none;"></div>
+      </div>
+
+      <!-- Submit -->
+      <button class="reg-btn" onclick="doRegister()">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        Create Viewer Account
+      </button>
+    </div>
+
+    <div class="bottom-link">Already have an account?<a href="login.html">Sign In</a></div>
+</div>
+
+  <script src="app.js?v=3"></script>
+  <script>
+    function updateStrength(pw) {
+      const wrap  = document.getElementById('strengthWrap');
+      const fill  = document.getElementById('strengthFill');
+      const label = document.getElementById('strengthLabel');
+      if (!pw) { wrap.style.display = 'none'; return; }
+      let score = 0;
+      if (pw.length >= 8)  score++;
+      if (pw.length >= 12) score++;
+      if (/[A-Z]/.test(pw) && /[0-9]/.test(pw)) score++;
+      if (/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(pw)) score++;
+      score = Math.max(1, Math.min(score, 4));
+      const map = {
+        1:{ color:'#DC2626', label:'Weak',   w:'25%' },
+        2:{ color:'#D97706', label:'Fair',   w:'50%' },
+        3:{ color:'#9CA3AF', label:'Good',   w:'75%' },
+        4:{ color:'#FFFFFF', label:'Strong', w:'100%'}
+      };
+      const m = map[score];
+      wrap.style.display='block'; fill.style.width=m.w; fill.style.background=m.color;
+      label.style.color=m.color; label.textContent=m.label;
+    }
+
+    function checkMatch() {
+      const pw   = document.getElementById('regPw').value;
+      const pw2  = document.getElementById('regPw2').value;
+      const hint = document.getElementById('matchHint');
+      if (!pw2) { hint.style.display='none'; return; }
+      hint.style.display = 'flex';
+      if (pw === pw2) {
+        hint.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Passwords match`;
+        hint.style.color = '#86EFAC';
+      } else {
+        hint.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Passwords do not match`;
+        hint.style.color = '#FCA5A5';
+      }
+    }
+
+    async function doRegister() {
+      const name = document.getElementById('fullName').value.trim();
+      const email= document.getElementById('regEmail').value.trim();
+      const pw   = document.getElementById('regPw').value;
+      const pw2  = document.getElementById('regPw2').value;
+      clearMsgs();
+      if (!name || !email || !pw || !pw2) { showError('All fields are required.'); return; }
+      if (name.length < 2) { showError('Please enter your full name.'); return; }
+      if (!email.includes('@') || !email.split('@')[1]?.includes('.')) { showError('Please enter a valid email address.'); return; }
+      if (pw.length < 8)   { showError('Password must be at least 8 characters.'); return; }
+      if (pw !== pw2)      { showError('Passwords do not match.'); return; }
+      if (window.App && App.hasConfiguredBackend()) {
+        try {
+          await App.request('/api/auth/register', {
+            method: 'POST',
+            auth: false,
+            body: { name, email, password: pw }
+          });
+          showSuccess('Account created! Redirecting to Sign In...');
+          setTimeout(() => { window.location.href = 'login.html'; }, 1600);
+          return;
+        } catch (error) {
+          showError(error.message || 'Backend registration failed.');
+          return;
+        }
+      }
+
+      const demoUsers = window.App ? App.getDemoUsers() : [];
+      if (demoUsers.some(user => user.email.toLowerCase() === email.toLowerCase())) {
+        showError('That email is already registered.');
+        return;
+      }
+      if (window.App) {
+        demoUsers.push({ name, email, password: pw, role: 'Viewer' });
+        App.saveDemoUsers(demoUsers);
+      }
+      showSuccess('Account created! Redirecting to Sign In...');
+      setTimeout(() => { window.location.href = 'login.html'; }, 1600);
+    }
+    function showError(msg)  { document.getElementById('regErrMsg').textContent = msg; document.getElementById('regError').style.display = 'flex'; }
+    function showSuccess(msg){ document.getElementById('regSuccessMsg').textContent = msg; document.getElementById('regSuccess').style.display = 'flex'; }
+    function clearMsgs()     { document.getElementById('regError').style.display='none'; document.getElementById('regSuccess').style.display='none'; }
+  </script>
+</body>
+</html>

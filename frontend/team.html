@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Our Team — Zero Click AI</title>
+  <meta name="description" content="Meet the 11 interns who built Zero Click AI at Genesis Training."/>
+  <link rel="stylesheet" href="styles.css"/>
+  <style>
+    .team-container { max-width: 1100px; margin: 0 auto; padding: 0 28px 100px; position: relative; z-index: 1; }
+
+    /* ── Hero ── */
+    .team-hero { text-align: center; padding: 100px 28px 64px; position: relative; z-index: 1; }
+    .team-hero h1 { font-size: clamp(2.4rem, 5vw, 3.6rem); font-weight: 900; letter-spacing: -2px; color: var(--white); margin-bottom: 14px; }
+    .team-hero h1 span { color: var(--burgundy-lt); }
+    .team-hero p { font-size: 14px; color: var(--text-muted); max-width: 520px; margin: 0 auto 0; line-height: 1.8; }
+
+    /* ── Section label ── */
+    .divider-row { display: flex; align-items: center; gap: 16px; margin-bottom: 36px; }
+    .divider-row .line { flex: 1; height: 1px; background: var(--glass-border); }
+    .divider-row span { font-size: 9px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--text-hint); white-space: nowrap; }
+
+    /* ── Stats bar ── */
+    .team-stats { display: flex; justify-content: center; gap: 0; margin-bottom: 56px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--r-lg); overflow: hidden; }
+    .ts-item { flex: 1; text-align: center; padding: 18px 12px; border-right: 1px solid var(--glass-border); }
+    .ts-item:last-child { border-right: none; }
+    .ts-num { font-size: 1.8rem; font-weight: 900; color: var(--burgundy-lt); }
+    .ts-label { font-size: 9px; font-weight: 600; color: var(--text-hint); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 3px; }
+
+    /* ── Team grid ── */
+    .team-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 20px; }
+    .team-grid-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 56px; }
+    @media(max-width: 900px) { .team-grid-5, .team-grid-6 { grid-template-columns: repeat(3, 1fr); } }
+    @media(max-width: 600px) { .team-grid-5, .team-grid-6 { grid-template-columns: repeat(2, 1fr); } }
+
+    /* ── Member card ── */
+    .member-card {
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: var(--r-lg); padding: 22px 14px 18px; text-align: center;
+      position: relative; overflow: visible;
+      transition: border-color 0.22s, transform 0.22s, box-shadow 0.22s;
+    }
+    .member-card:hover { border-color: var(--burgundy-border); transform: translateY(-4px); box-shadow: 0 12px 40px rgba(109,0,26,0.2); }
+    .member-card.is-lead { border-color: rgba(245,158,11,0.35); }
+    .member-card.is-lead:hover { border-color: rgba(245,158,11,0.65); box-shadow: 0 12px 40px rgba(245,158,11,0.15); }
+    .member-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent-color, var(--burgundy-lt)), transparent); opacity: var(--accent-opacity, 0.7); }
+
+    /* Lead badge */
+    .lead-badge {
+      position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+      background: #F59E0B; color: #000; font-size: 7px; font-weight: 800;
+      padding: 3px 10px; border-radius: 20px; white-space: nowrap; letter-spacing: 0.8px;
+      text-transform: uppercase; box-shadow: 0 2px 10px rgba(245,158,11,0.4);
+    }
+
+    /* Avatar circle */
+    .member-avatar {
+      width: 58px; height: 58px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 800; color: #fff;
+      margin: 0 auto 12px; border: 2px solid var(--accent-color, var(--burgundy-lt));
+    }
+    .member-card.compact .member-avatar { width: 48px; height: 48px; font-size: 15px; margin-bottom: 10px; }
+
+    .member-name { font-size: 12.5px; font-weight: 700; color: var(--white); margin-bottom: 5px; line-height: 1.3; }
+    .member-card.compact .member-name { font-size: 11px; }
+
+    .member-role-badge {
+      display: inline-block; font-size: 8px; font-weight: 700;
+      padding: 3px 9px; border-radius: 20px; margin-bottom: 6px;
+      color: var(--accent-color, var(--burgundy-lt));
+      background: rgba(109,0,26,0.12);
+      border: 1px solid rgba(109,0,26,0.25);
+    }
+
+    .member-module { font-size: 9px; color: var(--text-hint); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.8px; }
+
+    /* Tech stack pills */
+    .member-tech { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-bottom: 10px; }
+    .tech-pill {
+      font-size: 7.5px; font-weight: 600; padding: 2px 7px; border-radius: 20px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      color: var(--accent-color, #aaa); white-space: nowrap; letter-spacing: 0.3px;
+    }
+
+    /* Social links */
+    .member-links { display: flex; justify-content: center; gap: 8px; }
+    .social-btn {
+      width: 32px; height: 32px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      text-decoration: none; transition: all 0.18s;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06);
+      color: #aaaaaa;
+    }
+    .social-btn svg { display: block; flex-shrink: 0; pointer-events: none; }
+    .social-btn:hover { transform: translateY(-2px); }
+    .social-btn.linkedin { color: #0A66C2; border-color: rgba(10,102,194,0.35); background: rgba(10,102,194,0.08); }
+    .social-btn.linkedin:hover { background: rgba(10,102,194,0.18); border-color: rgba(10,102,194,0.6); color: #2d8fe8; }
+    .social-btn.github  { color: #cccccc; border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.05); }
+    .social-btn.github:hover  { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.35); color: #ffffff; }
+    .social-btn.email   { color: #f87171; border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.07); }
+    .social-btn.email:hover   { background: rgba(248,113,113,0.16); border-color: rgba(248,113,113,0.55); color: #fca5a5; }
+
+    /* ── Module legend ── */
+    .module-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-bottom: 56px; }
+    .mod-item {
+      display: flex; align-items: center; gap: 7px;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: 20px; padding: 6px 14px;
+      font-size: 10px; font-weight: 600; color: var(--text-muted);
+    }
+    .mod-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Footer ── */
+    .footer { text-align: center; padding: 32px 28px; border-top: 1px solid var(--glass-border); margin-top: 40px; font-size: 10px; color: var(--text-hint); letter-spacing: 1.5px; }
+    .footer-links { display: flex; justify-content: center; gap: 24px; margin-bottom: 12px; }
+    .footer-links a { font-size: 11px; color: var(--text-hint); text-decoration: none; transition: color 0.2s; }
+    .footer-links a:hover { color: var(--white-60); }
+  </style>
+</head>
+<body class="page-fade">
+  <div class="bg-glow-tl"></div>
+  <div class="bg-glow-br"></div>
+
+  <!-- Nav -->
+  <nav class="nav">
+    <div class="nav-brand">
+      <div class="nav-brand-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      </div>
+      Zero Click AI
+    </div>
+    <div class="nav-links">
+      <a href="landing.html" class="nav-link">Home</a>
+      <a href="team.html" class="nav-link active">Our Team</a>
+      <a href="dashboard.html" class="nav-link">Dashboard</a>
+      <a href="login.html" class="btn btn-burg btn-sm">Sign In</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <div class="team-hero">
+    <div style="margin-bottom:20px;">
+      <span style="display:inline-flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--white-60);background:rgba(255,255,255,0.04);border:1px solid var(--glass-border);border-radius:20px;padding:6px 16px;">
+        <span style="width:6px;height:6px;border-radius:50%;background:var(--burgundy-lt);box-shadow:0 0 8px var(--burgundy-lt);display:inline-block;"></span>
+        Genesis Training &nbsp;·&nbsp; Python &amp; AI Internship
+      </span>
+    </div>
+    <h1>Meet Our <span>Team</span></h1>
+    <p>11 interns across 5 modules who designed, built and deployed Zero Click AI from scratch over the course of the internship program.</p>
+  </div>
+
+  <div class="team-container">
+
+    <!-- Stats bar -->
+    <div class="team-stats">
+      <div class="ts-item"><div class="ts-num">11</div><div class="ts-label">Interns</div></div>
+      <div class="ts-item"><div class="ts-num">5</div><div class="ts-label">Modules</div></div>
+      <div class="ts-item"><div class="ts-num">1</div><div class="ts-label">AI Platform</div></div>
+      <div class="ts-item"><div class="ts-num">5</div><div class="ts-label">Tech Stacks</div></div>
+    </div>
+
+    <!-- Module legend -->
+    <div class="divider-row"><div class="line"></div><span>Module Overview</span><div class="line"></div></div>
+    <div class="module-legend">
+      <div class="mod-item"><div class="mod-dot" style="background:#DC2626"></div>Module 1 — Data Management</div>
+      <div class="mod-item"><div class="mod-dot" style="background:#818cf8"></div>Module 2 — NLP &amp; Chatbot</div>
+      <div class="mod-item"><div class="mod-dot" style="background:#fbbf24"></div>Module 3 — Analytics &amp; Prediction</div>
+      <div class="mod-item"><div class="mod-dot" style="background:#34d399"></div>Module 4 — Dashboard &amp; Visualization</div>
+      <div class="mod-item"><div class="mod-dot" style="background:#60a5fa"></div>Module 5 — Integration &amp; Systems</div>
+    </div>
+
+    <!-- Row 1: 5 members -->
+    <div class="divider-row"><div class="line"></div><span>Core Team</span><div class="line"></div></div>
+    <div class="team-grid-5">
+
+      <!-- Naheen — Team Lead -->
+      <div class="member-card is-lead" style="--accent-color:#F59E0B">
+        <div class="lead-badge">Team Lead</div>
+        <div class="member-avatar" style="background:linear-gradient(135deg,#F59E0B,#B45309)">NK</div>
+        <div class="member-name">Naheen Kauser</div>
+        <div class="member-role-badge" style="color:#F59E0B;background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.25)">Team Lead</div>
+        <div class="member-module">Module 4 · Dashboard</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Streamlit</span><span class="tech-pill">Plotly</span><span class="tech-pill">Pandas</span><span class="tech-pill">ReportLab</span><span class="tech-pill">OpenPyXL</span><span class="tech-pill">Team Leadership</span><span class="tech-pill">Project Mgmt</span>
+        </div>
+        <div class="member-links">
+          <a href="https://in.linkedin.com/in/naheen-kauser-02957a323" target="_blank" class="social-btn linkedin" title="LinkedIn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+          <a href="https://github.com/NaheenKauserr" target="_blank" class="social-btn github" title="GitHub">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:naheenkauser113@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Manu -->
+      <div class="member-card" style="--accent-color:#94a3b8; --accent-opacity:0.8">
+        <div class="member-avatar" style="background:linear-gradient(135deg,#94a3b8,#334155)">MN</div>
+        <div class="member-name">Manu Naik</div>
+        <div class="member-role-badge" style="color:#94a3b8;background:rgba(148,163,184,0.1);border-color:rgba(148,163,184,0.25)">Systems Engineer</div>
+        <div class="member-module">Module 5 · Integration</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Streamlit</span><span class="tech-pill">Groq API</span><span class="tech-pill">LLaMA</span><span class="tech-pill">SMTP</span><span class="tech-pill">SpeechRecognition</span><span class="tech-pill">Session State</span><span class="tech-pill">System Integration</span>
+        </div>
+        <div class="member-links">
+          <a href="https://www.linkedin.com/in/manu-naik-73bb702a7" target="_blank" class="social-btn linkedin" title="LinkedIn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+          <a href="https://github.com/manunaik111" target="_blank" class="social-btn github" title="GitHub">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:manupnaik639@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Dhaval -->
+      <div class="member-card" style="--accent-color:#818cf8">
+        <div class="member-avatar" style="background:linear-gradient(135deg,#818cf8,#4338ca)">DS</div>
+        <div class="member-name">Dhaval Shah</div>
+        <div class="member-role-badge" style="color:#818cf8;background:rgba(129,140,248,0.1);border-color:rgba(129,140,248,0.25)">NLP Engineer</div>
+        <div class="member-module">Module 2 · Chatbot</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">NLTK</span><span class="tech-pill">spaCy</span><span class="tech-pill">Regex</span><span class="tech-pill">Intent Classification</span><span class="tech-pill">NER</span><span class="tech-pill">Groq API</span>
+        </div>
+        <div class="member-links">
+          <a href="https://www.linkedin.com/in/dhaval-shah1628" target="_blank" class="social-btn linkedin" title="LinkedIn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+          <a href="https://github.com/Dhaval-max3" target="_blank" class="social-btn github" title="GitHub">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:d34058397@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Mohammed Ammar -->
+      <div class="member-card" style="--accent-color:#38bdf8">
+        <div class="member-avatar" style="background:linear-gradient(135deg,#38bdf8,#0369a1)">MA</div>
+        <div class="member-name">Mohammed Ammar</div>
+        <div class="member-role-badge" style="color:#38bdf8;background:rgba(56,189,248,0.1);border-color:rgba(56,189,248,0.25)">Data Engineer</div>
+        <div class="member-module">Module 1 · Data Mgmt</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Pandas</span><span class="tech-pill">NumPy</span><span class="tech-pill">Data Cleaning</span><span class="tech-pill">Type Inference</span><span class="tech-pill">File Uploader</span><span class="tech-pill">Data Validation</span>
+        </div>
+        <div class="member-links">
+          <a href="https://www.linkedin.com/in/mohammed-ammar-bin-zameer-589220363/" target="_blank" class="social-btn linkedin" title="LinkedIn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+          <a href="https://github.com/ammar3633" target="_blank" class="social-btn github" title="GitHub">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:mohammedammar060802@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Yusuf -->
+      <div class="member-card" style="--accent-color:#34d399">
+        <div class="member-avatar" style="background:linear-gradient(135deg,#34d399,#047857)">YC</div>
+        <div class="member-name">Yusuf Chonche</div>
+        <div class="member-role-badge" style="color:#34d399;background:rgba(52,211,153,0.1);border-color:rgba(52,211,153,0.25)">UI Developer</div>
+        <div class="member-module">Module 4 · Dashboard</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Streamlit</span><span class="tech-pill">Plotly</span><span class="tech-pill">CSS Glass UI</span><span class="tech-pill">HTML</span><span class="tech-pill">Responsive Design</span><span class="tech-pill">Data Viz</span>
+        </div>
+        <div class="member-links">
+          <a href="https://www.linkedin.com/in/yusuf-chonche-5114892ba/" target="_blank" class="social-btn linkedin" title="LinkedIn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+          <a href="https://github.com/yusufchonche0-web" target="_blank" class="social-btn github" title="GitHub">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:yusufchonche0@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: 6 members -->
+    <div class="team-grid-6">
+
+      <!-- Vaishnavi -->
+      <div class="member-card compact" style="--accent-color:#fbbf24">
+        <div class="member-avatar" style="background:linear-gradient(135deg,#fbbf24,#b45309)">VM</div>
+        <div class="member-name">Vaishnavi Metri</div>
+        <div class="member-role-badge" style="color:#fbbf24;background:rgba(251,191,36,0.1);border-color:rgba(251,191,36,0.25)">Analytics Engineer</div>
+        <div class="member-module">Module 3 · Analytics</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Pandas</span><span class="tech-pill">NumPy</span><span class="tech-pill">Statistical Analysis</span><span class="tech-pill">KPI Design</span><span class="tech-pill">Streamlit</span><span class="tech-pill">Data Aggregation</span>
+        </div>
+        <div class="member-links">
+          <a href="https://www.linkedin.com/in/vaishnavi-metri-578b0835a" target="_blank" class="social-btn linkedin" title="LinkedIn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+          <a href="https://github.com/vaishnavimetri234-v11s" target="_blank" class="social-btn github" title="GitHub">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:vaishnavimetri234@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Anoosha -->
+      <div class="member-card compact" style="--accent-color:#f9a8d4">
+        <div class="member-avatar" style="background:linear-gradient(135deg,#f9a8d4,#be185d)">AK</div>
+        <div class="member-name">Anoosha Kembhavi</div>
+        <div class="member-role-badge" style="color:#f9a8d4;background:rgba(249,168,212,0.1);border-color:rgba(249,168,212,0.25)">Systems Engineer</div>
+        <div class="member-module">Module 5 · Integration</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Streamlit</span><span class="tech-pill">SpeechRecognition</span><span class="tech-pill">Plotly</span><span class="tech-pill">UI Components</span><span class="tech-pill">Session State</span><span class="tech-pill">Integration</span>
+        </div>
+        <div class="member-links">
+          <a href="http://www.linkedin.com/in/anoosha-kembhavi" target="_blank" class="social-btn linkedin" title="LinkedIn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+          <a href="https://github.com/anooshakembhavi-afk" target="_blank" class="social-btn github" title="GitHub">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:anooshakembhavi@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Snehal -->
+      <div class="member-card compact" style="--accent-color:#fb923c">
+        <div class="member-avatar" style="background:linear-gradient(135deg,#fb923c,#c2410c)">SK</div>
+        <div class="member-name">Snehal Kamble</div>
+        <div class="member-role-badge" style="color:#fb923c;background:rgba(251,146,60,0.1);border-color:rgba(251,146,60,0.25)">Data Engineer</div>
+        <div class="member-module">Module 1 · Data Mgmt</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Pandas</span><span class="tech-pill">Data Cleaning</span><span class="tech-pill">Preprocessing</span><span class="tech-pill">NumPy</span><span class="tech-pill">Regex</span><span class="tech-pill">Data Quality</span>
+        </div>
+        <div class="member-links">
+          <a href="https://www.linkedin.com/in/snehal-k-b48369318" target="_blank" class="social-btn linkedin" title="LinkedIn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+          <a href="https://github.com/kamblesnehal578-sketch" target="_blank" class="social-btn github" title="GitHub">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:kamblesnehal578@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Nazhat -->
+      <div class="member-card compact" style="--accent-color:#f472b6">
+        <div class="member-avatar" style="background:linear-gradient(135deg,#f472b6,#9d174d)">NN</div>
+        <div class="member-name">Nazhat Naikwadi</div>
+        <div class="member-role-badge" style="color:#f472b6;background:rgba(244,114,182,0.1);border-color:rgba(244,114,182,0.25)">Data Engineer</div>
+        <div class="member-module">Module 1 · Data Mgmt</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Pandas</span><span class="tech-pill">Data Profiling</span><span class="tech-pill">Schema Detection</span><span class="tech-pill">Type Inference</span><span class="tech-pill">Data Management</span>
+        </div>
+        <div class="member-links">
+          <a href="https://linkedin.com/in/nazhatnaikwadi" target="_blank" class="social-btn linkedin" title="LinkedIn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+          <a href="https://github.com/nazhatnaikwadi" target="_blank" class="social-btn github" title="GitHub">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:nazhatnaikwadi@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Keerti -->
+      <div class="member-card compact" style="--accent-color:#2dd4bf">
+        <div class="member-avatar" style="background:linear-gradient(135deg,#2dd4bf,#0f766e)">KG</div>
+        <div class="member-name">Keerti Gadigeppagoudar</div>
+        <div class="member-role-badge" style="color:#2dd4bf;background:rgba(45,212,191,0.1);border-color:rgba(45,212,191,0.25)">Analytics Engineer</div>
+        <div class="member-module">Module 3 · Analytics</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Pandas</span><span class="tech-pill">NLTK</span><span class="tech-pill">Text Preprocessing</span><span class="tech-pill">Keyword Extraction</span><span class="tech-pill">Forecasting</span><span class="tech-pill">Statistical Analysis</span>
+        </div>
+        <div class="member-links">
+          <a href="https://www.linkedin.com/in/keertig" target="_blank" class="social-btn linkedin" title="LinkedIn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+          <a href="https://github.com/keertiG-1296" target="_blank" class="social-btn github" title="GitHub">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:keerti.s.g2020@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Samruddhi -->
+      <div class="member-card compact" style="--accent-color:#4ade80">
+        <div class="member-avatar" style="background:linear-gradient(135deg,#4ade80,#15803d)">SP</div>
+        <div class="member-name">Samruddhi Patil</div>
+        <div class="member-role-badge" style="color:#4ade80;background:rgba(74,222,128,0.1);border-color:rgba(74,222,128,0.25)">NLP Engineer</div>
+        <div class="member-module">Module 2 · Chatbot</div>
+        <div class="member-tech">
+          <span class="tech-pill">Python</span><span class="tech-pill">Streamlit</span><span class="tech-pill">Plotly</span><span class="tech-pill">NLTK</span><span class="tech-pill">Chatbot Design</span><span class="tech-pill">Response Formatting</span><span class="tech-pill">UI Layout</span>
+        </div>
+        <div class="member-links">
+          <a href="https://www.linkedin.com/in/samruddhi-patil-a1575933a" target="_blank" class="social-btn linkedin" title="LinkedIn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+          <a href="https://github.com/samruddhi128" target="_blank" class="social-btn github" title="GitHub">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </a>
+          <a href="mailto:patilsamruddhi863@gmail.com" class="social-btn email" title="Email">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div style="background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--r-xl);padding:40px;text-align:center;position:relative;overflow:hidden;">
+      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--burgundy),var(--burgundy-lt),var(--burgundy),transparent);"></div>
+      <div style="font-size:1.6rem;font-weight:900;color:var(--white);letter-spacing:-0.5px;margin-bottom:10px;">Ready to explore the platform?</div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:28px;">Built by this team. Powered by AI. Upload your data and see it in action.</div>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+        <a href="login.html" class="btn btn-burg btn-lg">Get Started</a>
+        <a href="landing.html" class="btn btn-outline btn-lg">Back to Home</a>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-links">
+        <a href="landing.html">Home</a>
+        <a href="team.html">Our Team</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="login.html">Sign In</a>
+      </div>
+      ZERO CLICK AI &nbsp;·&nbsp; GENESIS TRAINING &nbsp;·&nbsp; PYTHON &amp; AI INTERNSHIP &nbsp;·&nbsp; POWERED BY GROQ AI
+    </div>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Data Quality — Zero Click AI</title>
+  <link rel="stylesheet" href="styles.css"/>
+  <style>
+    .dash-wrap { display:flex; min-height:100vh; padding-top:58px; overflow:hidden; }
+    .main { flex:1; margin-left:230px; padding:0 28px 80px; height:calc(100vh - 58px); overflow-y:auto; overflow-x:hidden; transition:margin-left .35s cubic-bezier(.25,.46,.45,.94); }
+    .main.collapsed { margin-left:56px; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; padding:20px 0 16px; border-bottom:1px solid var(--glass-border); margin-bottom:24px; }
+    .topbar-page { font-size:18px; font-weight:700; color:var(--white); letter-spacing:-.3px; }
+    .topbar-breadcrumb { font-size:10px; color:var(--text-hint); margin-top:3px; }
+    .topbar-breadcrumb span { color:var(--burgundy-lt); }
+    .sec-hdr { display:flex; align-items:center; gap:8px; font-size:9px; font-weight:700; letter-spacing:2.5px; text-transform:uppercase; color:var(--text-hint); margin:0 0 14px; }
+    .sec-hdr::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,rgba(109,0,26,.5),transparent); }
+    .sec-hdr svg { color:var(--burgundy-lt); flex-shrink:0; }
+    .burg-hr { height:1px; border:none; background:linear-gradient(90deg,transparent,rgba(109,0,26,.6),rgba(109,0,26,.6),transparent); margin:24px 0; }
+
+    /* Score card */
+    .score-row { display:grid; grid-template-columns:280px 1fr; gap:16px; margin-bottom:24px; }
+    @media(max-width:800px){ .score-row { grid-template-columns:1fr; } }
+    .score-card {
+      background:var(--glass-bg); border:1px solid var(--glass-border);
+      border-radius:var(--r-lg); padding:28px; text-align:center; position:relative; overflow:hidden;
+    }
+    .score-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--burgundy-lt),transparent); }
+    .score-ring { position:relative; width:120px; height:120px; margin:0 auto 16px; }
+    .score-ring svg { transform:rotate(-90deg); }
+    .score-ring-num { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:1.8rem; font-weight:900; color:var(--white); }
+    .score-label { font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--text-muted); }
+    .score-grade { font-size:11px; font-weight:700; margin-top:6px; padding:3px 12px; border-radius:20px; display:inline-block; }
+    .grade-excellent { background:rgba(74,222,128,.12); color:#4ADE80; }
+    .grade-good      { background:rgba(96,165,250,.12); color:#60A5FA; }
+    .grade-fair      { background:rgba(251,191,36,.12); color:#FCD34D; }
+    .grade-poor      { background:rgba(248,113,113,.12); color:#F87171; }
+
+    /* Dimension scores */
+    .dim-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+    .dim-item {
+      background:var(--black-2); border:1px solid var(--glass-border);
+      border-radius:var(--r-sm); padding:12px 14px;
+    }
+    .dim-name { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+    .dim-bar-track { height:6px; background:var(--black-3); border-radius:3px; overflow:hidden; margin-bottom:4px; }
+    .dim-bar-fill { height:100%; border-radius:3px; transition:width .8s; }
+    .dim-val { font-size:12px; font-weight:800; color:var(--white); }
+
+    /* Warning cards */
+    .warning-list { display:flex; flex-direction:column; gap:8px; margin-bottom:24px; }
+    .warning-item {
+      display:flex; align-items:flex-start; gap:10px;
+      padding:12px 14px; border-radius:var(--r-sm);
+      font-size:12px; line-height:1.55;
+    }
+    .warn-critical { background:rgba(248,113,113,.08); border:1px solid rgba(248,113,113,.25); color:#FCA5A5; }
+    .warn-high     { background:rgba(251,146,60,.08);  border:1px solid rgba(251,146,60,.25);  color:#FED7AA; }
+    .warn-medium   { background:rgba(251,191,36,.08);  border:1px solid rgba(251,191,36,.25);  color:#FDE68A; }
+    .warn-low      { background:rgba(74,222,128,.08);  border:1px solid rgba(74,222,128,.25);  color:#BBF7D0; }
+    .warn-icon { flex-shrink:0; margin-top:1px; }
+
+    /* Light mode — warning text needs darker colors to be readable */
+    [data-theme="light"] .warn-critical { background:rgba(220,38,38,.08);  border-color:rgba(220,38,38,.30);  color:#B91C1C; }
+    [data-theme="light"] .warn-high     { background:rgba(234,88,12,.08);  border-color:rgba(234,88,12,.30);  color:#C2410C; }
+    [data-theme="light"] .warn-medium   { background:rgba(180,130,0,.08);  border-color:rgba(180,130,0,.30);  color:#92400E; }
+    [data-theme="light"] .warn-low      { background:rgba(22,163,74,.08);  border-color:rgba(22,163,74,.30);  color:#166534; }
+    /* Tables */
+    .tbl-wrap { background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:var(--r-md); overflow:hidden; margin-bottom:24px; }
+    .tbl-head { padding:14px 18px; border-bottom:1px solid var(--glass-border); font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-muted); }
+    .table-scroll { overflow-x:auto; }
+
+    /* State cards */
+    .state-card { background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:var(--r-md); padding:48px; text-align:center; }
+    .state-icon { color:var(--text-hint); margin-bottom:14px; }
+    .state-title { font-size:16px; font-weight:700; color:var(--white); margin-bottom:8px; }
+    .state-sub { font-size:12px; color:var(--text-muted); }
+
+    /* Sidebar */
+    .sb-logo { width:34px;height:34px;border-radius:8px;flex-shrink:0;background:linear-gradient(135deg,#6D001A,#3D000E);border:1px solid rgba(109,0,26,.6);display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(109,0,26,.4); }
+    .sb-brand-name { font-size:13px;font-weight:800;letter-spacing:-.3px;color:var(--white);line-height:1.2; }
+    .sb-brand-sub  { font-size:9px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--text-hint);margin-top:1px; }
+    .sb-divider    { height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent);margin:12px 0; }
+    .sb-user { display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:10px 12px; }
+    .sb-avatar { width:32px;height:32px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#6D001A,#3D000E);border:1px solid rgba(109,0,26,.5);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:rgba(255,255,255,.9); }
+    .sb-user-name { font-size:12px;font-weight:700;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .sb-user-role { font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#FF6B6B;margin-top:1px; }
+    .sb-section { font-size:8px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--text-hint);padding:0 2px;margin:16px 0 8px;display:flex;align-items:center;gap:8px; }
+    .sb-section::after { content:'';flex:1;height:1px;background:rgba(255,255,255,.04); }
+    .sb-nav-btn { display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text-muted);cursor:pointer;transition:all .18s;text-decoration:none;border:none;background:transparent;font-family:inherit;width:100%;text-align:left; }
+    .sb-nav-btn:hover { background:var(--white-06);color:var(--white); }
+    .sb-nav-btn.active { background:var(--burgundy-dim);color:#FF6B6B; }
+    .sb-nav-btn svg { flex-shrink:0; }
+    .sidebar.collapsed .sb-hide { display:none!important; }
+    .sidebar.collapsed .sb-header { justify-content:center; }
+    .sb-toggle-icon { transition:transform .35s cubic-bezier(.25,.46,.45,.94); }
+  </style>
+</head>
+<body class="page-fade">
+
+  <nav class="nav">
+    <div class="nav-brand">
+      <button id="sidebarToggleBtn" onclick="toggleSidebar()" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;margin-right:12px;display:flex;align-items:center;padding:6px;border-radius:4px;transition:background .2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+        <svg class="sb-toggle-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+      </button>
+      <div class="nav-brand-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      </div>
+      Zero Click<span style="font-weight:300;color:var(--text-muted);">AI</span>
+    </div>
+    <div class="nav-links">
+      <span id="navRoleBadge" class="badge badge-burg" style="margin-right:8px;">Viewer</span>
+      <a href="landing.html" class="nav-link">Home</a>
+      <a href="dashboard.html" class="nav-link">Dashboard</a>
+      <button onclick="signOut()" class="btn btn-ghost btn-sm">Sign Out</button>
+    </div>
+  </nav>
+
+  <div class="dash-wrap">
+    <aside class="sidebar" id="mainSidebar">
+      <div class="sb-header" style="display:flex;align-items:center;gap:10px;padding:2px 4px 16px;">
+        <div class="sb-logo"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+        <div class="sb-hide"><div class="sb-brand-name">Zero Click AI</div><div class="sb-brand-sub">Analytics</div></div>
+      </div>
+      <div class="sb-divider"></div>
+      <div class="sb-section sb-hide">Navigation</div>
+      <a href="dashboard.html" class="sb-nav-btn sb-hide"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+      <a href="profiling.html" class="sb-nav-btn sb-hide"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Dataset Profiling</a>
+      <a href="quality.html" class="sb-nav-btn active sb-hide"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Data Quality</a>
+      <a href="analytics.html" class="sb-nav-btn sb-hide"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>Predictive Analytics</a>
+      <a href="users.html" class="sb-nav-btn sb-hide" id="usersNavLink" style="display:none;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>User Management</a>
+      <div class="sb-divider" style="margin-top:14px;"></div>
+      <div class="sb-user sb-hide">
+        <div class="sb-avatar" id="sbAvatar">A</div>
+        <div><div class="sb-user-name" id="sbUserName">Admin User</div><div class="sb-user-role" id="sbUserRole">Admin</div></div>
+      </div>
+    </aside>
+
+    <main class="main" id="mainContent">
+      <div class="topbar">
+        <div>
+          <div class="topbar-page">Data Quality</div>
+          <div class="topbar-breadcrumb">Home › <span>Data Quality</span></div>
+        </div>
+        <button class="btn btn-burg btn-sm" onclick="loadQuality()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+          Run Assessment
+        </button>
+      </div>
+
+      <div id="loadingState" class="state-card" style="display:none;">
+        <div class="state-icon"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div>
+        <div class="state-title">Running quality assessment...</div>
+        <div class="state-sub">Checking duplicates, missing values, outliers and inconsistencies</div>
+      </div>
+
+      <div id="noBackendState" class="state-card">
+        <div class="state-icon"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="state-title">Connect backend to run quality checks</div>
+        <div class="state-sub" style="margin-bottom:20px;">Set your FastAPI backend URL from the dashboard first</div>
+        <a href="dashboard.html" class="btn btn-burg btn-sm">Go to Dashboard</a>
+      </div>
+
+      <div id="qualityContent" style="display:none;">
+
+        <!-- Score + dimensions -->
+        <div class="sec-hdr">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Quality Score
+        </div>
+        <div class="score-row">
+          <div class="score-card">
+            <div class="score-ring">
+              <svg width="120" height="120" viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="10"/>
+                <circle id="scoreArc" cx="60" cy="60" r="50" fill="none" stroke="#4ADE80" stroke-width="10" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="314"/>
+              </svg>
+              <div class="score-ring-num" id="scoreNum">—</div>
+            </div>
+            <div class="score-label">Overall Quality Score</div>
+            <div class="score-grade grade-good" id="scoreGrade">Calculating...</div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              Quality Dimensions
+            </div>
+            <div class="dim-grid" id="dimGrid" style="margin-top:14px;"></div>
+          </div>
+        </div>
+
+        <div class="burg-hr"></div>
+
+        <!-- Warnings -->
+        <div class="sec-hdr">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Warnings &amp; Suggestions
+        </div>
+        <div class="warning-list" id="warningList"></div>
+
+        <div class="burg-hr"></div>
+
+        <!-- Duplicate summary -->
+        <div class="sec-hdr">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+          Duplicate Rows
+        </div>
+        <div class="chart-card" style="margin-bottom:24px;padding:20px 24px;">
+          <div style="display:flex;gap:32px;align-items:center;">
+            <div style="text-align:center;">
+              <div style="font-size:2rem;font-weight:900;color:var(--white);" id="dupCount">—</div>
+              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Duplicate rows</div>
+            </div>
+            <div style="text-align:center;">
+              <div style="font-size:2rem;font-weight:900;" id="dupPct">—</div>
+              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Percentage</div>
+            </div>
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;" id="dupStatus">Running check...</div>
+          </div>
+        </div>
+
+        <!-- Missing values table -->
+        <div class="sec-hdr">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Missing Values by Column
+        </div>
+        <div class="tbl-wrap">
+          <div class="tbl-head" id="missingTitle">Columns with missing data</div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead><tr><th>Column</th><th>Missing Count</th><th>Missing %</th><th>Severity</th></tr></thead>
+              <tbody id="missingBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Outliers table -->
+        <div class="sec-hdr">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Outlier Detection
+          <span style="font-size:9px;color:var(--text-hint);text-transform:none;letter-spacing:0;margin-left:4px;">IQR method</span>
+        </div>
+        <div class="tbl-wrap" style="margin-bottom:24px;">
+          <div class="tbl-head" id="outlierTitle">Outliers per column</div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead><tr><th>Column</th><th>Outlier Count</th><th>Outlier %</th><th>Lower Bound</th><th>Upper Bound</th></tr></thead>
+              <tbody id="outlierBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js?v=3"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", init);
+
+    function init() {
+      if (!window.App || !App.isAuthenticated()) { window.location.replace("login.html"); return; }
+      hydrateUser();
+      if (App.hasConfiguredBackend()) loadQuality();
+      else document.getElementById("noBackendState").style.display = "block";
+    }
+
+    function hydrateUser() {
+      const user = App.getUser() || {};
+      const role = user.role || "Viewer";
+      const name = user.name || user.email || "User";
+      const initials = name.split(" ").map(x=>x[0]).join("").slice(0,2).toUpperCase();
+      document.getElementById("navRoleBadge").textContent = role;
+      document.getElementById("sbAvatar").textContent = initials;
+      document.getElementById("sbUserName").textContent = name;
+      document.getElementById("sbUserRole").textContent = role;
+      if (["Admin","Sales Manager"].includes(role))
+        document.getElementById("usersNavLink").style.display = "flex";
+    }
+
+    async function loadQuality() {
+      if (!App.hasConfiguredBackend()) return;
+      document.getElementById("noBackendState").style.display = "none";
+      document.getElementById("qualityContent").style.display = "none";
+      document.getElementById("loadingState").style.display = "block";
+      try {
+        const data = await App.request("/api/data/quality");
+        document.getElementById("loadingState").style.display = "none";
+        document.getElementById("qualityContent").style.display = "block";
+        renderQuality(data);
+      } catch (err) {
+        document.getElementById("loadingState").style.display = "none";
+        const titleEl = document.querySelector("#noBackendState .state-title");
+        const subEl = document.querySelector("#noBackendState .state-sub");
+        if (titleEl) {
+          titleEl.textContent = err && err.status ? "Quality check failed" : "Connect backend to run quality checks";
+        }
+        if (subEl) {
+          subEl.textContent = err && err.message
+            ? err.message
+            : "Set your FastAPI backend URL from the dashboard first";
+        }
+        document.getElementById("noBackendState").style.display = "block";
+        App.showToast(err.message || "Quality check failed.", "error");
+      }
+    }
+
+    function renderQuality(data) {
+      const score = data.score || {};
+      const overall = typeof score === "number" ? score : (score.overall || score.total || 0);
+      renderScoreRing(overall);
+
+      // Dimension bars
+      const dims = typeof score === "object" ? score : {};
+      const dimKeys = Object.entries(dims).filter(([k]) => k !== "overall" && k !== "total");
+      const colors = ["#4ADE80","#60A5FA","#F59E0B","#A78BFA","#F87171"];
+      document.getElementById("dimGrid").innerHTML = dimKeys.map(([k,v],i) => `
+        <div class="dim-item">
+          <div class="dim-name">${k.replace(/_/g," ")}</div>
+          <div class="dim-bar-track"><div class="dim-bar-fill" style="width:${v}%;background:${colors[i%colors.length]};"></div></div>
+          <div class="dim-val" style="color:${colors[i%colors.length]};">${typeof v==="number"?v.toFixed(1):v}</div>
+        </div>
+      `).join("") || '<div style="color:var(--text-hint);font-size:12px;grid-column:span 2;">No dimension data</div>';
+
+      // Warnings
+      const warnings = data.warnings || [];
+      document.getElementById("warningList").innerHTML = warnings.length
+        ? warnings.map(w => {
+            const lvl = (typeof w === "object" ? w.level || w.severity || "medium" : "medium").toLowerCase();
+            const msg = typeof w === "object" ? w.message || JSON.stringify(w) : w;
+            const cls = lvl.includes("critical") ? "warn-critical" : lvl.includes("high") ? "warn-high" : lvl.includes("low") ? "warn-low" : "warn-medium";
+            return `<div class="warning-item ${cls}">
+              <svg class="warn-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              ${esc(msg)}
+            </div>`;
+          }).join("")
+        : '<div class="warning-item warn-low"><svg class="warn-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>No warnings — dataset looks healthy</div>';
+
+      // Duplicates
+      const dup = data.duplicates || {};
+      const dupCount = dup.count || 0;
+      const dupPct = dup.percentage || 0;
+      document.getElementById("dupCount").textContent = dupCount.toLocaleString("en-US");
+      document.getElementById("dupPct").style.color = dupCount > 0 ? "#F87171" : "#4ADE80";
+      document.getElementById("dupPct").textContent = dupPct + "%";
+      document.getElementById("dupStatus").textContent = dupCount > 0
+        ? `${dupCount} duplicate rows found. Consider removing them before analysis.`
+        : "No duplicate rows detected. Dataset is clean.";
+
+      // Missing
+      const missing = data.missing || [];
+      document.getElementById("missingTitle").textContent = `${missing.length} columns with missing data`;
+      document.getElementById("missingBody").innerHTML = missing.length
+        ? missing.map(m => {
+            const pct = parseFloat(m["Missing %"] || 0);
+            const cls = pct > 30 ? "color:#F87171;" : pct > 10 ? "color:#F59E0B;" : "color:#4ADE80;";
+            return `<tr>
+              <td style="font-weight:600;color:var(--white);">${esc(m.Column||"")}</td>
+              <td>${m["Missing Count"]||0}</td>
+              <td style="${cls}font-weight:700;">${m["Missing %"]||"0"}%</td>
+              <td>${esc(m.Severity||"")}</td>
+            </tr>`;
+          }).join("")
+        : '<tr><td colspan="4" style="text-align:center;color:var(--text-hint);padding:24px;">No missing values found</td></tr>';
+
+      // Outliers
+      const outliers = data.outliers || [];
+      document.getElementById("outlierTitle").textContent = `${outliers.length} columns with outliers`;
+      document.getElementById("outlierBody").innerHTML = outliers.length
+        ? outliers.map(o => `<tr>
+            <td style="font-weight:600;color:var(--white);">${esc(o.Column||o.column||"")}</td>
+            <td style="color:#F87171;">${o["Outlier Count"]||o.outlier_count||0}</td>
+            <td>${o["Outlier %"]||o.outlier_pct||0}%</td>
+            <td style="color:var(--text-hint);">${fmt(o["Lower Bound"]||o.lower_bound)}</td>
+            <td style="color:var(--text-hint);">${fmt(o["Upper Bound"]||o.upper_bound)}</td>
+          </tr>`).join("")
+        : '<tr><td colspan="5" style="text-align:center;color:var(--text-hint);padding:24px;">No outliers detected</td></tr>';
+    }
+
+    function renderScoreRing(score) {
+      const s = Math.min(100, Math.max(0, parseFloat(score) || 0));
+      document.getElementById("scoreNum").textContent = s.toFixed(0);
+      const circumference = 314;
+      const offset = circumference - (s / 100) * circumference;
+      const arc = document.getElementById("scoreArc");
+      arc.style.strokeDashoffset = offset;
+      const color = s >= 80 ? "#4ADE80" : s >= 60 ? "#60A5FA" : s >= 40 ? "#F59E0B" : "#F87171";
+      arc.setAttribute("stroke", color);
+      const gradeEl = document.getElementById("scoreGrade");
+      if (s >= 80) { gradeEl.textContent = "Excellent"; gradeEl.className = "score-grade grade-excellent"; }
+      else if (s >= 60) { gradeEl.textContent = "Good"; gradeEl.className = "score-grade grade-good"; }
+      else if (s >= 40) { gradeEl.textContent = "Fair"; gradeEl.className = "score-grade grade-fair"; }
+      else { gradeEl.textContent = "Poor"; gradeEl.className = "score-grade grade-poor"; }
+    }
+
+    function toggleSidebar() {
+      const sb = document.getElementById("mainSidebar");
+      const main = document.getElementById("mainContent");
+      const btn = document.getElementById("sidebarToggleBtn");
+      const col = sb.classList.toggle("collapsed");
+      main.classList.toggle("collapsed", col);
+      const icon = btn.querySelector(".sb-toggle-icon");
+      if (icon) icon.style.transform = col ? "rotate(180deg)" : "rotate(0deg)";
+    }
+
+    function signOut() { if (window.App) App.signOut(); }
+    function esc(v) { return String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+    function fmt(v) { return v !== undefined && v !== null ? parseFloat(v).toLocaleString("en-US",{maximumFractionDigits:2}) : "—"; }
+  </script>
+</body>
+</html>

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Zero Click AI — Intelligent Sales Analytics Platform</title>
+  <meta name="description" content="Zero Click AI transforms raw sales data into real-time intelligence. Upload any dataset and get instant KPIs, AI insights, forecasts and automated reports."/>
+  <link rel="stylesheet" href="styles.css"/>
+  <style>
+    .lp-container { max-width: 1000px; margin: 0 auto; padding: 0 28px 100px; position: relative; z-index: 1; }
+
+    /* ── Nav ── */
+    .nav-links a.active { color: var(--white); }
+
+    /* ── Hero ── */
+    .hero { text-align: center; padding: 120px 28px 0; position: relative; z-index: 1; }
+    .eyebrow-pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--white-60); background: rgba(255,255,255,0.04);
+      border: 1px solid var(--glass-border); border-radius: 20px; padding: 6px 16px;
+    }
+    .eyebrow-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--burgundy-lt); box-shadow: 0 0 8px var(--burgundy-lt); display: inline-block; }
+    .hero-title { font-size: clamp(3rem, 7vw, 5.4rem); font-weight: 900; letter-spacing: -3px; line-height: 1.02; margin-bottom: 10px; color: var(--white); }
+    .hero-title .burg { color: var(--burgundy-lt); }
+    .hero-product-name { font-size: clamp(1.1rem, 2.5vw, 1.4rem); font-weight: 700; color: var(--text-muted); letter-spacing: 4px; text-transform: uppercase; margin-bottom: 28px; }
+    .hero-sub { max-width: 560px; margin: 0 auto 44px; font-size: 15px; line-height: 1.8; color: var(--text-muted); }
+    .hero-sub b { color: var(--text-secondary); }
+    .hero-cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+    /* ── Stats strip ── */
+    .stats-strip { display: flex; justify-content: center; gap: 52px; flex-wrap: wrap; margin: 56px 0 64px; }
+    .stat-item { text-align: center; }
+    .stat-num { font-size: 2rem; font-weight: 900; color: var(--white); }
+    .stat-num-burg { color: var(--burgundy-lt) !important; }
+    .stat-label { font-size: 10px; font-weight: 600; color: var(--text-hint); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 4px; }
+
+    /* ── Divider label ── */
+    .divider-row { display: flex; align-items: center; gap: 16px; margin-bottom: 48px; }
+    .divider-row .line { flex: 1; height: 1px; background: var(--glass-border); }
+    .divider-row span { font-size: 9px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--text-hint); white-space: nowrap; }
+
+    /* ── How it works ── */
+    .workflow-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 64px; }
+    @media(max-width: 720px){ .workflow-grid { grid-template-columns: repeat(2, 1fr); } }
+    .workflow-step {
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: var(--r-lg); padding: 24px 18px; text-align: center; position: relative;
+    }
+    .workflow-step::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--burgundy-lt), transparent); }
+    .step-num { font-size: 10px; font-weight: 800; color: var(--burgundy-lt); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+    .step-icon { margin-bottom: 10px; color: var(--text-muted); }
+    .step-title { font-size: 13px; font-weight: 700; color: var(--white); margin-bottom: 6px; }
+    .step-desc { font-size: 11px; color: var(--text-hint); line-height: 1.6; }
+
+    /* ── Preview card ── */
+    .preview-card {
+      background: var(--glass-bg); backdrop-filter: blur(28px);
+      border: 1px solid var(--glass-border); border-radius: var(--r-xl);
+      padding: 28px; margin-bottom: 64px; position: relative; overflow: hidden;
+    }
+    .preview-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--burgundy), var(--burgundy-lt), var(--burgundy), transparent);
+      box-shadow: 0 0 20px rgba(109,0,26,0.5);
+    }
+    .preview-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    @media(max-width: 600px){ .preview-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+    .mini-kpi {
+      background: var(--black-2); border: 1px solid var(--glass-border);
+      border-radius: var(--r-sm); padding: 14px; overflow: hidden; position: relative;
+    }
+    .mini-kpi-bar { position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+    .mini-kpi-label { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; margin-top: 4px; }
+    .mini-kpi-value { font-size: 1.3rem; font-weight: 900; color: var(--white); }
+    .preview-hint { margin-top: 18px; text-align: center; font-size: 11px; color: var(--text-hint); }
+
+    /* ── Features grid ── */
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 64px; }
+    @media(max-width: 720px){ .features-grid { grid-template-columns: 1fr; } }
+    .feature-card {
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: var(--r-lg); padding: 24px; position: relative; overflow: hidden;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .feature-card:hover { border-color: var(--burgundy-border); transform: translateY(-3px); }
+    .feature-icon-box {
+      width: 38px; height: 38px; background: var(--burgundy-dim); border: 1px solid var(--burgundy-border);
+      border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center;
+      margin-bottom: 14px; color: var(--burgundy-lt);
+    }
+    .feature-title { font-size: 14px; font-weight: 700; color: var(--white); margin-bottom: 8px; }
+    .feature-desc { font-size: 12px; color: var(--text-muted); line-height: 1.7; }
+
+    /* ── Roles grid ── */
+    .roles-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 64px; }
+    @media(max-width: 720px){ .roles-grid { grid-template-columns: repeat(2, 1fr); } }
+    .role-card {
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: var(--r-sm); padding: 14px 10px; text-align: center;
+    }
+    .role-name { font-size: 12px; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+    .role-desc { font-size: 10px; color: var(--text-hint); }
+
+    /* ── Tech stack strip ── */
+    .tech-strip { display: flex; justify-content: center; align-items: center; gap: 32px; flex-wrap: wrap; margin-bottom: 64px; padding: 24px 28px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--r-lg); }
+    .tech-item { text-align: center; }
+    .tech-name { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+    .tech-role { font-size: 9px; color: var(--text-hint); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+
+    /* ── CTA block ── */
+    .cta-block {
+      background: var(--glass-bg); backdrop-filter: blur(28px);
+      border: 1px solid var(--glass-border); border-radius: var(--r-xl);
+      padding: 48px 40px; text-align: center; position: relative; overflow: hidden;
+    }
+    .cta-block::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--burgundy), var(--burgundy-lt), var(--burgundy), transparent);
+    }
+    .cta-block h2 { font-size: 2.2rem; font-weight: 900; letter-spacing: -1px; margin-bottom: 12px; }
+    .cta-block p  { color: var(--text-muted); margin-bottom: 32px; font-size: 14px; }
+    .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+    /* ── Footer ── */
+    .footer { text-align: center; padding: 32px 28px; border-top: 1px solid var(--glass-border); margin-top: 40px; font-size: 10px; color: var(--text-hint); letter-spacing: 1.5px; }
+    .footer-links { display: flex; justify-content: center; gap: 24px; margin-bottom: 12px; }
+    .footer-links a { font-size: 11px; color: var(--text-hint); text-decoration: none; transition: color 0.2s; }
+    .footer-links a:hover { color: var(--white-60); }
+  </style>
+</head>
+<body class="page-fade">
+  <div class="bg-glow-tl"></div>
+  <div class="bg-glow-br"></div>
+
+  <!-- Nav -->
+  <nav class="nav">
+    <div class="nav-brand">
+      <div class="nav-brand-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      </div>
+      Zero Click AI
+    </div>
+    <div class="nav-links">
+      <a href="landing.html" class="nav-link active">Home</a>
+      <a href="team.html" class="nav-link">Our Team</a>
+      <a href="dashboard.html" class="nav-link">Dashboard</a>
+      <a href="login.html" class="btn btn-burg btn-sm">Sign In</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1 class="hero-title">Zero Click<br><span class="burg">AI</span></h1>
+    <div class="hero-product-name">Upload Data. Unlock Intelligence.</div>
+    <p class="hero-sub">
+      Upload any sales dataset and get <b>instant KPIs</b>, <b>AI-generated insights</b>,
+      <b>predictive forecasts</b> and <b>automated reports</b> — all without writing a single line of code.
+      Powered by Groq AI, FastAPI and a multi-module architecture built by 11 interns.
+    </p>
+    <div class="hero-cta">
+      <a href="login.html" class="btn btn-burg btn-lg">Get Started</a>
+      <a href="team.html" class="btn btn-outline btn-lg">Meet the Team</a>
+    </div>
+  </div>
+
+  <div class="lp-container">
+
+    <!-- Stats -->
+    <div class="stats-strip">
+      <div class="stat-item">
+        <div class="stat-num stat-num-burg">10K+</div>
+        <div class="stat-label">Records Analyzed</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">5</div>
+        <div class="stat-label">Access Roles</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num stat-num-burg">11</div>
+        <div class="stat-label">Team Members</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">5</div>
+        <div class="stat-label">Modules Built</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num stat-num-burg">2</div>
+        <div class="stat-label">Report Formats</div>
+      </div>
+    </div>
+
+    <!-- How it works -->
+    <div class="divider-row"><div class="line"></div><span>How It Works</span><div class="line"></div></div>
+    <div class="workflow-grid">
+      <div class="workflow-step">
+        <div class="step-num">Step 01</div>
+        <div class="step-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div class="step-title">Upload Dataset</div>
+        <div class="step-desc">CSV, Excel or JSON. Any sales data with regions, categories and dates.</div>
+      </div>
+      <div class="workflow-step">
+        <div class="step-num">Step 02</div>
+        <div class="step-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        </div>
+        <div class="step-title">Auto-Processing</div>
+        <div class="step-desc">Data is cleaned, validated, profiled and quality-scored automatically.</div>
+      </div>
+      <div class="workflow-step">
+        <div class="step-num">Step 03</div>
+        <div class="step-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        </div>
+        <div class="step-title">Explore Dashboard</div>
+        <div class="step-desc">KPIs, charts, trends and regional breakdowns update in real time.</div>
+      </div>
+      <div class="workflow-step">
+        <div class="step-num">Step 04</div>
+        <div class="step-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div class="step-title">Ask &amp; Export</div>
+        <div class="step-desc">Ask the AI assistant natural-language questions. Download PDF or Excel reports.</div>
+      </div>
+    </div>
+
+    <!-- Preview -->
+    <div class="divider-row"><div class="line"></div><span>Dashboard Preview</span><div class="line"></div></div>
+    <div class="preview-card">
+      <div class="preview-kpi-grid">
+        <div class="mini-kpi">
+          <div class="mini-kpi-bar" style="background:linear-gradient(90deg,#6D001A,#DC2626)"></div>
+          <div class="mini-kpi-label">Total Sales</div>
+          <div class="mini-kpi-value">$2.3M</div>
+        </div>
+        <div class="mini-kpi">
+          <div class="mini-kpi-bar" style="background:linear-gradient(90deg,#4ade80,#16a34a)"></div>
+          <div class="mini-kpi-label">Total Profit</div>
+          <div class="mini-kpi-value">$286K</div>
+        </div>
+        <div class="mini-kpi">
+          <div class="mini-kpi-bar" style="background:linear-gradient(90deg,#60a5fa,#2563eb)"></div>
+          <div class="mini-kpi-label">Avg Order Value</div>
+          <div class="mini-kpi-value">$229</div>
+        </div>
+        <div class="mini-kpi">
+          <div class="mini-kpi-bar" style="background:linear-gradient(90deg,#fbbf24,#d97706)"></div>
+          <div class="mini-kpi-label">Profit Margin</div>
+          <div class="mini-kpi-value">11.6%</div>
+        </div>
+      </div>
+      <div class="preview-hint">Live KPI cards · Filterable by Category, Region, Year &amp; Profit Status · Real-time SSE updates</div>
+    </div>
+
+    <!-- Features -->
+    <div class="divider-row"><div class="line"></div><span>Platform Features</span><div class="line"></div></div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        </div>
+        <div class="feature-title">Real-Time Dashboard</div>
+        <div class="feature-desc">KPI cards with sparklines, trend charts, category breakdowns and regional analysis. Filters update every component instantly. SSE push for live data.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div class="feature-title">AI Chat Assistant</div>
+        <div class="feature-desc">Natural-language queries powered by Groq LLaMA with NLP intent classification. Voice input and voice output supported. Context-aware responses from your live data.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div class="feature-title">Automated Reports</div>
+        <div class="feature-desc">7-page PDF reports with charts, KPIs, ML insights and forecasts. Excel exports with styled tables and multi-sheet summaries. One-click generation.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div class="feature-title">Smart Data Upload</div>
+        <div class="feature-desc">CSV, Excel and JSON support with auto-encoding detection. Automatic column type inference, date parsing, duplicate removal and missing value imputation.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+        </div>
+        <div class="feature-title">Predictive Analytics</div>
+        <div class="feature-desc">Sales forecasting with 6-month projections and 10% growth targeting. AI-generated business insights and smart recommendations from your data patterns.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon-box">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div class="feature-title">Role-Based Access</div>
+        <div class="feature-desc">Five permission tiers — Admin, Sales Manager, Analyst, Executive, Viewer — with JWT authentication. Admins control user roles directly from the dashboard.</div>
+      </div>
+    </div>
+
+    <!-- Tech Stack -->
+    <div class="divider-row"><div class="line"></div><span>Technology Stack</span><div class="line"></div></div>
+    <div class="tech-strip">
+      <div class="tech-item"><div class="tech-name">FastAPI</div><div class="tech-role">Backend API</div></div>
+      <div class="tech-item"><div class="tech-name">Streamlit</div><div class="tech-role">Internal UI</div></div>
+      <div class="tech-item"><div class="tech-name">Groq AI</div><div class="tech-role">LLM Engine</div></div>
+      <div class="tech-item"><div class="tech-name">LangChain</div><div class="tech-role">NLP Pipeline</div></div>
+      <div class="tech-item"><div class="tech-name">scikit-learn</div><div class="tech-role">ML Models</div></div>
+      <div class="tech-item"><div class="tech-name">Chart.js</div><div class="tech-role">Visualizations</div></div>
+      <div class="tech-item"><div class="tech-name">PostgreSQL</div><div class="tech-role">Data Storage</div></div>
+      <div class="tech-item"><div class="tech-name">Docker</div><div class="tech-role">Deployment</div></div>
+    </div>
+
+    <!-- Roles -->
+    <div class="divider-row"><div class="line"></div><span>Access Levels</span><div class="line"></div></div>
+    <div class="roles-grid">
+      <div class="role-card"><div class="role-name">Admin</div><div class="role-desc">Full access + user management</div></div>
+      <div class="role-card"><div class="role-name">Sales Manager</div><div class="role-desc">Dashboard + reports + upload</div></div>
+      <div class="role-card"><div class="role-name">Analyst</div><div class="role-desc">Analytics + data quality</div></div>
+      <div class="role-card"><div class="role-name">Executive</div><div class="role-desc">KPIs + insights + PDF export</div></div>
+      <div class="role-card"><div class="role-name">Viewer</div><div class="role-desc">Read-only dashboard access</div></div>
+    </div>
+
+    <!-- CTA -->
+    <div class="cta-block">
+      <h2>Ready to analyze your data?</h2>
+      <p>Upload your first dataset in seconds. No configuration required.</p>
+      <div class="cta-row">
+        <a href="login.html" class="btn btn-burg btn-lg">Sign In</a>
+        <a href="register.html" class="btn btn-outline btn-lg">Create Free Account</a>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-links">
+        <a href="landing.html">Home</a>
+        <a href="team.html">Our Team</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="login.html">Sign In</a>
+      </div>
+      ZERO CLICK AI &nbsp;·&nbsp; GENESIS TRAINING &nbsp;·&nbsp; PYTHON &amp; AI INTERNSHIP &nbsp;·&nbsp; POWERED BY GROQ AI
+    </div>
+
+  </div>
+</body>
+</html>
