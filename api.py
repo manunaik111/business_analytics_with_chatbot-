@@ -240,7 +240,7 @@ def _json_safe(value):
 
 
 def _email_env_status() -> dict:
-    provider_preference = os.getenv("EMAIL_PROVIDER", "auto").strip().lower()
+    provider_preference = os.getenv("EMAIL_PROVIDER", "smtp").strip().lower()
     resend_key = os.getenv("RESEND_API_KEY", "").strip()
     sender_email = os.getenv("SENDER_EMAIL", "").strip()
     smtp_user = os.getenv("SMTP_USER", "").strip()

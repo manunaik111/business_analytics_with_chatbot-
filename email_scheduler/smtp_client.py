@@ -35,7 +35,7 @@ class EmailClient:
     """
 
     def __init__(self):
-        self.provider_preference = os.getenv("EMAIL_PROVIDER", "auto").strip().lower()
+        self.provider_preference = os.getenv("EMAIL_PROVIDER", "smtp").strip().lower()
         self.resend_api_key = os.getenv("RESEND_API_KEY", "").strip()
         self.resend_api_base = os.getenv("RESEND_API_BASE", "https://api.resend.com").rstrip("/")
 
@@ -64,7 +64,17 @@ class EmailClient:
         provider = self._resolve_provider()
         if provider == "resend":
             payload = self._compose_resend_payload(recipients, report_type, pdf_path, schedule_id)
-            return self._send_resend(payload, schedule_id=schedule_id)
+            try:
+                return self._send_resend(payload, schedule_id=schedule_id)
+            except RuntimeError as exc:
+                if self._should_fallback_to_smtp(exc):
+                    logger.warning(
+                        "Resend failed with a recoverable configuration error; "
+                        "falling back to SMTP for this send."
+                    )
+                    msg = self._compose_smtp_message(recipients, report_type, pdf_path, schedule_id)
+                    return self._send_smtp(msg, recipients)
+                raise
         if provider == "smtp":
             msg = self._compose_smtp_message(recipients, report_type, pdf_path, schedule_id)
             return self._send_smtp(msg, recipients)
@@ -109,7 +119,7 @@ class EmailClient:
         date_str = self._report_date()
 
         msg = MIMEMultipart("mixed")
-        msg["From"] = self._sender_header()
+        msg["From"] = self._sender_header("smtp")
         msg["To"] = ", ".join(recipients)
         msg["Subject"] = self._subject(report_label, date_str)
 
@@ -131,7 +141,7 @@ class EmailClient:
         report_label = report_type.replace("_", " ").title()
         date_str = self._report_date()
         payload = {
-            "from": self._sender_header(),
+            "from": self._sender_header("resend"),
             "to": recipients,
             "subject": self._subject(report_label, date_str),
             "html": self._html_email_body(report_label, date_str, schedule_id),
@@ -236,7 +246,7 @@ class EmailClient:
         """Transmit via SMTP."""
         try:
             with self._connect_smtp() as server:
-                failed = server.sendmail(self.sender, recipients, msg.as_string())
+                failed = server.sendmail(self._smtp_sender_email(), recipients, msg.as_string())
             if failed:
                 logger.warning(f"Some recipients failed: {failed}")
             else:
@@ -285,11 +295,13 @@ class EmailClient:
             raise
 
     def _resolve_provider(self) -> str:
-        resend_ready = bool(self.resend_api_key and self.sender)
-        smtp_ready = bool(self.user and self.password)
+        resend_ready = self._resend_ready()
+        smtp_ready = self._smtp_ready()
 
         if self.provider_preference == "resend":
-            return "resend" if resend_ready else "disabled"
+            if resend_ready:
+                return "resend"
+            return "smtp" if smtp_ready else "disabled"
         if self.provider_preference == "smtp":
             return "smtp" if smtp_ready else "disabled"
         if resend_ready:
@@ -297,6 +309,23 @@ class EmailClient:
         if smtp_ready:
             return "smtp"
         return "disabled"
+
+    def _resend_ready(self) -> bool:
+        return bool(self.resend_api_key and self.sender)
+
+    def _smtp_ready(self) -> bool:
+        return bool(self.user and self.password)
+
+    def _should_fallback_to_smtp(self, exc: RuntimeError) -> bool:
+        if not self._smtp_ready():
+            return False
+        message = str(exc).lower()
+        recoverable_markers = [
+            "domain is not verified",
+            "validation_error",
+            "resend api error (403)",
+        ]
+        return any(marker in message for marker in recoverable_markers)
 
     def _read_attachment(self, pdf_path: str):
         pdf_file = Path(pdf_path)
@@ -306,10 +335,14 @@ class EmailClient:
         with open(pdf_path, "rb") as f:
             return pdf_file, f.read()
 
-    def _sender_header(self) -> str:
-        if not self.sender:
+    def _sender_header(self, provider: str) -> str:
+        sender_email = self._smtp_sender_email() if provider == "smtp" else self.sender
+        if not sender_email:
             raise RuntimeError("SENDER_EMAIL is not configured.")
-        return f"{self.sender_name} <{self.sender}>"
+        return f"{self.sender_name} <{sender_email}>"
+
+    def _smtp_sender_email(self) -> str:
+        return self.user or self.sender
 
     def _subject(self, report_label: str, date_str: str) -> str:
         return f"[Scheduled Report] {report_label} - {date_str}"

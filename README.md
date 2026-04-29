@@ -391,7 +391,7 @@ Edit `.env` and fill in the required values (see [Environment Variables](#enviro
 | `JWT_SECRET` | ✅ | Long random string for JWT signing |
 | `GROQ_API_KEY` | ✅ | Groq API key — get one free at [console.groq.com](https://console.groq.com) |
 | `ALLOWED_ORIGINS` | ✅ | Comma-separated CORS origins (e.g. `http://localhost:8000`) |
-| `EMAIL_PROVIDER` | Optional | `auto`, `resend`, or `smtp` (default `auto`) |
+| `EMAIL_PROVIDER` | Optional | `smtp`, `resend`, or `auto` (default `smtp`) |
 | `RESEND_API_KEY` | Optional | Resend API key for API-based email sending |
 | `RESEND_API_BASE` | Optional | Resend API base URL (default `https://api.resend.com`) |
 | `SMTP_HOST` | Optional | SMTP server hostname (e.g. `smtp.gmail.com`) |
