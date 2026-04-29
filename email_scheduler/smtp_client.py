@@ -1,44 +1,56 @@
 """
 email_sender/smtp_client.py
-FR 5.3 - Steps 30-31: Compose and deliver email with PDF attachment via SMTP.
+FR 5.3 - Steps 30-31: Compose and deliver email with PDF attachment.
+
+Supports either:
+  - SMTP (legacy/default fallback)
+  - Resend Email API
 """
 
-import smtplib
+import base64
 import logging
 import os
+import smtplib
+import uuid
+from datetime import datetime
+from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.application import MIMEApplication
-from datetime import datetime
 from pathlib import Path
+
+import requests
 
 logger = logging.getLogger(__name__)
 
 
 class EmailClient:
     """
-    SMTP email client for automated report delivery.
+    Email client for automated report delivery.
 
-    Reads SMTP configuration from environment variables:
-      SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD/SMTP_PASS,
-      SMTP_USE_TLS, SENDER_EMAIL, SENDER_NAME
+    Reads configuration from environment variables:
+      EMAIL_PROVIDER=auto|smtp|resend
+      RESEND_API_KEY, RESEND_API_BASE
+      SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD/SMTP_PASS, SMTP_USE_TLS
+      SENDER_EMAIL, SENDER_NAME
     """
 
     def __init__(self):
-        self.host     = os.getenv("SMTP_HOST", "smtp.gmail.com")
-        self.port     = int(os.getenv("SMTP_PORT", "587"))
-        self.user     = os.getenv("SMTP_USER", "")
-        # Backward compatible: allow either SMTP_PASSWORD or SMTP_PASS.
-        self.password = os.getenv("SMTP_PASSWORD") or os.getenv("SMTP_PASS", "")
-        self.use_tls  = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
-        self.sender   = os.getenv("SENDER_EMAIL", self.user)
+        self.provider_preference = os.getenv("EMAIL_PROVIDER", "auto").strip().lower()
+        self.resend_api_key = os.getenv("RESEND_API_KEY", "").strip()
+        self.resend_api_base = os.getenv("RESEND_API_BASE", "https://api.resend.com").rstrip("/")
+
+        self.host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        self.port = int(os.getenv("SMTP_PORT", "587"))
+        self.user = os.getenv("SMTP_USER", "").strip()
+        self.password = (os.getenv("SMTP_PASSWORD") or os.getenv("SMTP_PASS", "")).strip()
+        self.use_tls = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+        self.sender = os.getenv("SENDER_EMAIL", self.user).strip()
         self.sender_name = os.getenv("SENDER_NAME", "Report Scheduler System")
 
-    # ── Public API ─────────────────────────────────────────────────────────────
     def send_report(self, recipients: list, report_type: str,
                     pdf_path: str, schedule_id: int = None) -> bool:
         """
-        Step 30-31: Compose email with PDF attachment and send via SMTP.
+        Step 30-31: Compose email with PDF attachment and send it.
 
         Args:
             recipients:  List of recipient email addresses
@@ -49,54 +61,92 @@ class EmailClient:
         Returns:
             True on success, raises exception on failure
         """
-        msg = self._compose_message(recipients, report_type, pdf_path, schedule_id)
-        return self._send(msg, recipients)
+        provider = self._resolve_provider()
+        if provider == "resend":
+            payload = self._compose_resend_payload(recipients, report_type, pdf_path, schedule_id)
+            return self._send_resend(payload, schedule_id=schedule_id)
+        if provider == "smtp":
+            msg = self._compose_smtp_message(recipients, report_type, pdf_path, schedule_id)
+            return self._send_smtp(msg, recipients)
+        raise RuntimeError(
+            "Email is not configured. Set EMAIL_PROVIDER=resend with RESEND_API_KEY "
+            "and SENDER_EMAIL, or configure SMTP_USER and SMTP_PASSWORD."
+        )
 
     def test_connection(self) -> dict:
-        """Verify SMTP credentials and connectivity."""
-        if not self.user or not self.password:
+        """Verify configured provider settings and connectivity when possible."""
+        provider = self._resolve_provider()
+        if provider == "resend":
+            if not self.resend_api_key or not self.sender:
+                return {
+                    "success": False,
+                    "message": "Resend is not configured. Set RESEND_API_KEY and SENDER_EMAIL.",
+                }
             return {
-                "success": False,
-                "message": "SMTP is not configured. Set SMTP_USER and SMTP_PASSWORD (or SMTP_PASS).",
+                "success": True,
+                "message": "Resend configuration detected. Verify the sender domain in Resend before sending.",
             }
-        try:
-            with self._connect() as server:
-                return {"success": True, "message": "SMTP connection successful"}
-        except Exception as exc:
-            return {"success": False, "message": str(exc)}
+        if provider == "smtp":
+            if not self.user or not self.password:
+                return {
+                    "success": False,
+                    "message": "SMTP is not configured. Set SMTP_USER and SMTP_PASSWORD (or SMTP_PASS).",
+                }
+            try:
+                with self._connect_smtp():
+                    return {"success": True, "message": "SMTP connection successful"}
+            except Exception as exc:
+                return {"success": False, "message": str(exc)}
+        return {
+            "success": False,
+            "message": "Email is not configured. Set Resend or SMTP credentials.",
+        }
 
-    # ── Message Builder ─────────────────────────────────────────────────────────
-    def _compose_message(self, recipients: list, report_type: str,
-                         pdf_path: str, schedule_id: int) -> MIMEMultipart:
-        """Step 30: Compose the email with HTML body and PDF attachment."""
+    def _compose_smtp_message(self, recipients: list, report_type: str,
+                              pdf_path: str, schedule_id: int) -> MIMEMultipart:
+        """Compose an SMTP email with HTML body and PDF attachment."""
         report_label = report_type.replace("_", " ").title()
-        date_str = datetime.utcnow().strftime("%B %d, %Y")
+        date_str = self._report_date()
 
         msg = MIMEMultipart("mixed")
-        msg["From"]    = f"{self.sender_name} <{self.sender}>"
-        msg["To"]      = ", ".join(recipients)
-        msg["Subject"] = f"[Scheduled Report] {report_label} — {date_str}"
+        msg["From"] = self._sender_header()
+        msg["To"] = ", ".join(recipients)
+        msg["Subject"] = self._subject(report_label, date_str)
 
-        # HTML body
         html_body = self._html_email_body(report_label, date_str, schedule_id)
         msg.attach(MIMEText(html_body, "html"))
 
-        # PDF attachment
-        pdf_file = Path(pdf_path)
-        if pdf_file.exists():
-            with open(pdf_path, "rb") as f:
-                pdf_data = f.read()
+        pdf_file, pdf_data = self._read_attachment(pdf_path)
+        if pdf_file and pdf_data is not None:
             attachment = MIMEApplication(pdf_data, _subtype="pdf")
-            attachment.add_header(
-                "Content-Disposition", "attachment",
-                filename=pdf_file.name
-            )
+            attachment.add_header("Content-Disposition", "attachment", filename=pdf_file.name)
             msg.attach(attachment)
             logger.info(f"Attached PDF: {pdf_file.name} ({len(pdf_data):,} bytes)")
-        else:
-            logger.warning(f"PDF not found at {pdf_path}; sending without attachment.")
 
         return msg
+
+    def _compose_resend_payload(self, recipients: list, report_type: str,
+                                pdf_path: str, schedule_id: int) -> dict:
+        """Compose a Resend API payload with HTML body and PDF attachment."""
+        report_label = report_type.replace("_", " ").title()
+        date_str = self._report_date()
+        payload = {
+            "from": self._sender_header(),
+            "to": recipients,
+            "subject": self._subject(report_label, date_str),
+            "html": self._html_email_body(report_label, date_str, schedule_id),
+            "text": self._plain_text_email_body(report_label, date_str, schedule_id),
+        }
+
+        pdf_file, pdf_data = self._read_attachment(pdf_path)
+        if pdf_file and pdf_data is not None:
+            payload["attachments"] = [{
+                "filename": pdf_file.name,
+                "content": base64.b64encode(pdf_data).decode("ascii"),
+            }]
+            logger.info(f"Attached PDF for Resend: {pdf_file.name} ({len(pdf_data):,} bytes)")
+
+        return payload
 
     def _html_email_body(self, report_label: str, date_str: str, schedule_id: int) -> str:
         """Render an HTML email body."""
@@ -128,8 +178,8 @@ class EmailClient:
 <body>
 <div class="container">
   <div class="header">
-    <h1>📊 {report_label}</h1>
-    <p>Automated Report Delivery · {date_str}</p>
+    <h1>{report_label}</h1>
+    <p>Automated Report Delivery - {date_str}</p>
   </div>
   <div class="body">
     <div class="badge">SCHEDULED REPORT</div>
@@ -154,15 +204,24 @@ class EmailClient:
   </div>
   <div class="footer">
     This is an automated message. Please do not reply directly to this email.
-    · Confidential · Internal Use Only
+    - Confidential - Internal Use Only
   </div>
 </div>
 </body>
 </html>
 """
 
-    # ── SMTP Transport ─────────────────────────────────────────────────────────
-    def _connect(self) -> smtplib.SMTP:
+    def _plain_text_email_body(self, report_label: str, date_str: str, schedule_id: int) -> str:
+        return (
+            f"{report_label}\n"
+            f"Automated Report Delivery - {date_str}\n\n"
+            f"Your scheduled report is ready.\n"
+            f"Schedule ID: #{schedule_id or 'N/A'}\n"
+            f"Type: {report_label}\n\n"
+            "This is an automated message from Zero Click AI."
+        )
+
+    def _connect_smtp(self) -> smtplib.SMTP:
         """Open an authenticated SMTP connection."""
         server = smtplib.SMTP(self.host, self.port, timeout=30)
         server.ehlo()
@@ -173,10 +232,10 @@ class EmailClient:
             server.login(self.user, self.password)
         return server
 
-    def _send(self, msg: MIMEMultipart, recipients: list) -> bool:
-        """Step 31: Transmit via SMTP."""
+    def _send_smtp(self, msg: MIMEMultipart, recipients: list) -> bool:
+        """Transmit via SMTP."""
         try:
-            with self._connect() as server:
+            with self._connect_smtp() as server:
                 failed = server.sendmail(self.sender, recipients, msg.as_string())
             if failed:
                 logger.warning(f"Some recipients failed: {failed}")
@@ -192,3 +251,68 @@ class EmailClient:
         except Exception as exc:
             logger.exception(f"Email send failed: {exc}")
             raise
+
+    def _send_resend(self, payload: dict, schedule_id: int = None) -> bool:
+        """Transmit via the Resend HTTP API."""
+        if not self.resend_api_key:
+            raise RuntimeError("RESEND_API_KEY is not configured.")
+        if not self.sender:
+            raise RuntimeError("SENDER_EMAIL is required when using Resend.")
+
+        try:
+            response = requests.post(
+                f"{self.resend_api_base}/emails",
+                headers={
+                    "Authorization": f"Bearer {self.resend_api_key}",
+                    "Content-Type": "application/json",
+                    "Idempotency-Key": f"schedule-{schedule_id or 'manual'}-{uuid.uuid4()}",
+                },
+                json=payload,
+                timeout=30,
+            )
+            if response.status_code >= 400:
+                try:
+                    detail = response.json()
+                except ValueError:
+                    detail = response.text
+                raise RuntimeError(f"Resend API error ({response.status_code}): {detail}")
+
+            email_id = response.json().get("id")
+            logger.info(f"Email successfully sent via Resend to {payload['to']} (id={email_id})")
+            return True
+        except requests.RequestException as exc:
+            logger.exception(f"Resend API request failed: {exc}")
+            raise
+
+    def _resolve_provider(self) -> str:
+        resend_ready = bool(self.resend_api_key and self.sender)
+        smtp_ready = bool(self.user and self.password)
+
+        if self.provider_preference == "resend":
+            return "resend" if resend_ready else "disabled"
+        if self.provider_preference == "smtp":
+            return "smtp" if smtp_ready else "disabled"
+        if resend_ready:
+            return "resend"
+        if smtp_ready:
+            return "smtp"
+        return "disabled"
+
+    def _read_attachment(self, pdf_path: str):
+        pdf_file = Path(pdf_path)
+        if not pdf_file.exists():
+            logger.warning(f"PDF not found at {pdf_path}; sending without attachment.")
+            return None, None
+        with open(pdf_path, "rb") as f:
+            return pdf_file, f.read()
+
+    def _sender_header(self) -> str:
+        if not self.sender:
+            raise RuntimeError("SENDER_EMAIL is not configured.")
+        return f"{self.sender_name} <{self.sender}>"
+
+    def _subject(self, report_label: str, date_str: str) -> str:
+        return f"[Scheduled Report] {report_label} - {date_str}"
+
+    def _report_date(self) -> str:
+        return datetime.utcnow().strftime("%B %d, %Y")
