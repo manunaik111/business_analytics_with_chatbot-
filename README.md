@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 <div align="center">
 
 # ⚡ Zero Click AI
@@ -109,45 +108,6 @@ The platform was designed and built from scratch by a team of 11 interns across 
    │  users   │       │  API     │       │  data/       │
    │  .db     │       │  LLaMA   │       │  uploads/    │
    └──────────┘       └──────────┘       └──────────────┘
-=======
-# AI Chatbot with Company Data Analysis
-
-**Team 5 — Integration & Interface**
-
-This branch contains the integration layer that connects all project modules into a single working application.
-
----
-
-## What Team 5 Built
-
-- `main_app.py` — application entry point integrating all modules
-- `chatbot/chatbot_engine.py` — AI chatbot with stateful conversation memory
-- `report_generator.py` — PDF and Excel report generation
-- Full Streamlit UI with floating chatbot interface
-- Sidebar filters connected to all dashboard components
-- Startup loading screen and error handling
-
----
-
-## Setup
-
-```bash
-git clone https://github.com/manunaik111/AI-Sales-Chatbot-System.git
-cd AI-Sales-Chatbot-System
-py -3.11 -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-python -m nltk.downloader punkt stopwords punkt_tab
-```
-
-Create `.streamlit/secrets.toml`:
-```toml
-AI_API_KEY = "your-groq-api-key"
-```
-
-```bash
-streamlit run main_app.py
->>>>>>> team/team5-integration
 ```
 
 ---
@@ -431,16 +391,19 @@ Edit `.env` and fill in the required values (see [Environment Variables](#enviro
 | `JWT_SECRET` | ✅ | Long random string for JWT signing |
 | `GROQ_API_KEY` | ✅ | Groq API key — get one free at [console.groq.com](https://console.groq.com) |
 | `ALLOWED_ORIGINS` | ✅ | Comma-separated CORS origins (e.g. `http://localhost:8000`) |
+| `EMAIL_PROVIDER` | Optional | `auto`, `resend`, or `smtp` (default `auto`) |
+| `RESEND_API_KEY` | Optional | Resend API key for API-based email sending |
+| `RESEND_API_BASE` | Optional | Resend API base URL (default `https://api.resend.com`) |
 | `SMTP_HOST` | Optional | SMTP server hostname (e.g. `smtp.gmail.com`) |
 | `SMTP_PORT` | Optional | SMTP port (default `587`) |
 | `SMTP_USER` | Optional | SMTP username / sender email |
 | `SMTP_PASSWORD` | Optional | SMTP app password |
 | `SMTP_USE_TLS` | Optional | `true` or `false` (default `true`) |
-| `SENDER_EMAIL` | Optional | From address for scheduled emails |
+| `SENDER_EMAIL` | Optional | From address for scheduled emails. Required for Resend and should be verified |
 | `SENDER_NAME` | Optional | Display name for scheduled emails |
 | `DATABASE_URL` | Optional | SQLite path (default `database/scheduler.db`) |
 
-> **Note:** Email scheduling is fully optional. If `SMTP_USER` and `SMTP_PASSWORD` are not set, all email endpoints return a clear "disabled" message and the rest of the app continues normally.
+> **Note:** Email scheduling is fully optional. You can use either Resend or SMTP. If neither `RESEND_API_KEY` + `SENDER_EMAIL` nor SMTP credentials are set, all email endpoints return a clear "disabled" message and the rest of the app continues normally.
 
 ---
 

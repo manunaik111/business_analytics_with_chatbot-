@@ -240,18 +240,38 @@ def _json_safe(value):
 
 
 def _email_env_status() -> dict:
+    provider_preference = os.getenv("EMAIL_PROVIDER", "auto").strip().lower()
+    resend_key = os.getenv("RESEND_API_KEY", "").strip()
+    sender_email = os.getenv("SENDER_EMAIL", "").strip()
     smtp_user = os.getenv("SMTP_USER", "").strip()
     smtp_password = (os.getenv("SMTP_PASSWORD") or os.getenv("SMTP_PASS", "")).strip()
+
+    has_resend = bool(resend_key and sender_email)
     has_smtp = bool(smtp_user and smtp_password)
+    if provider_preference == "resend":
+        active_provider = "resend" if has_resend else "disabled"
+    elif provider_preference == "smtp":
+        active_provider = "smtp" if has_smtp else "disabled"
+    else:
+        active_provider = "resend" if has_resend else ("smtp" if has_smtp else "disabled")
+
+    enabled = HAS_SCHEDULER and active_provider != "disabled"
+    if enabled:
+        message = f"Email scheduler is available via {active_provider.capitalize()}."
+    else:
+        message = (
+            "Email is optional and currently disabled. Set EMAIL_PROVIDER=resend with "
+            "RESEND_API_KEY and SENDER_EMAIL, or configure SMTP_USER and SMTP_PASSWORD."
+        )
+
     return {
-        "enabled": HAS_SCHEDULER and has_smtp,
+        "enabled": enabled,
         "has_scheduler_module": HAS_SCHEDULER,
+        "provider_preference": provider_preference,
+        "provider": active_provider,
+        "has_resend_credentials": has_resend,
         "has_smtp_credentials": has_smtp,
-        "message": (
-            "Email scheduler is available."
-            if HAS_SCHEDULER and has_smtp
-            else "Email is optional and currently disabled. Set SMTP_USER and SMTP_PASSWORD (or SMTP_PASS) to enable it."
-        ),
+        "message": message,
     }
 
 
@@ -259,7 +279,7 @@ def _require_email_enabled() -> None:
     status = _email_env_status()
     if not status["has_scheduler_module"]:
         raise HTTPException(503, "Email scheduler module not available. Ensure email_scheduler/ folder is in project root.")
-    if not status["has_smtp_credentials"]:
+    if not status["enabled"]:
         raise HTTPException(503, status["message"])
 
 # ═════════════════════════════════════════════════════════════════════════════
