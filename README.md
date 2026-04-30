@@ -30,6 +30,7 @@ The platform was designed and built from scratch by a team of 11 interns across 
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Modules](#modules)
+- [AI Chatbot](#ai-chatbot)
 - [API Reference](#api-reference)
 - [Setup & Installation](#setup--installation)
 - [Environment Variables](#environment-variables)
@@ -51,7 +52,7 @@ The platform was designed and built from scratch by a team of 11 interns across 
 - **Dark glassmorphism UI** — responsive, accessible frontend with no external UI framework dependency
 
 ### AI & Intelligence
-- **Groq AI Chatbot** — powered by LLaMA 3.3 70B via Groq API; answers natural language questions about the loaded dataset with full conversation memory
+- **Groq AI Chatbot** — powered by LLaMA 3.3 70B; 3-tier response system (zero-token instant → light Groq → full code-gen) with conversation memory, follow-up context awareness, and token-efficient prompt design
 - **AI Insights** — auto-generated business insights from KPI data using the analytics engine
 - **Smart Recommendations** — actionable recommendations derived from dataset patterns
 - **Predictive Analytics** — linear + SES ensemble forecasting with seasonality adjustment and confidence bands
@@ -63,8 +64,8 @@ The platform was designed and built from scratch by a team of 11 interns across 
 
 ### NLP Pipeline
 - **Intent Classification** — TF-IDF + scikit-learn classifier trained on sales query patterns
-- **Entity Extraction** — product name, region, category, and metric entity recognition
-- **Query Execution** — structured query execution against the active DataFrame
+- **Entity Extraction** — product name, region, category, and metric entity recognition with fuzzy column matching
+- **Query Execution** — structured query execution against the active DataFrame with categorical groupby fallback
 - **Voice Input** — browser Web Speech API with MediaRecorder fallback to backend transcription
 - **Voice Output** — browser SpeechSynthesis with UK English female voice preference; gTTS backend fallback
 
@@ -114,7 +115,6 @@ The platform was designed and built from scratch by a team of 11 interns across 
 
 ## Tech Stack
 
-<<<<<<< HEAD
 | Layer | Technology |
 |---|---|
 | Backend framework | FastAPI 0.115 + Uvicorn |
@@ -176,8 +176,8 @@ zero-click-ai/
 │   └── predictive_engine.py    # SalesPredictiveEngine — linear + SES ensemble forecasting
 │
 ├── nlp/                        # Module 2 — NLP & Chatbot
-│   ├── nlp_processor.py        # Query parsing entry point
-│   ├── data_processor.py       # Query execution against DataFrame
+│   ├── nlp_processor.py        # Query parsing entry point + fuzzy column matching
+│   ├── data_processor.py       # Query execution with categorical groupby fallback
 │   ├── response_generator.py   # Template response generation
 │   ├── intent_classifier.py    # TF-IDF intent classification
 │   ├── entity_extractor.py     # Named entity extraction
@@ -239,12 +239,12 @@ Handles all file ingestion, validation, profiling, and quality assessment.
 ### Module 2 — NLP & Chatbot
 Processes natural language queries and generates responses.
 
-- **NLP Processor** (`nlp/nlp_processor.py`) — entry point; orchestrates preprocessing → intent classification → entity extraction → query parsing
-- **Intent Classifier** (`nlp/intent_classifier.py`) — TF-IDF vectorizer + scikit-learn classifier trained on sales query patterns (Sales Query, Profit Query, Ranking Query, Regional Query, Trend Query, Category Query, Segment Query, Comparison Query)
+- **NLP Processor** (`nlp/nlp_processor.py`) — entry point; orchestrates preprocessing → intent classification → entity extraction → query parsing. Includes fuzzy partial-word column matching and expanded metric aliases (income, earnings, margin, units, etc.)
+- **Intent Classifier** (`nlp/intent_classifier.py`) — TF-IDF vectorizer + scikit-learn classifier trained on sales query patterns
 - **Entity Extractor** (`nlp/entity_extractor.py`) — extracts product names, regions, categories, metrics, and time references from query text
-- **Data Processor** (`nlp/data_processor.py`) — executes structured queries against the active pandas DataFrame
+- **Data Processor** (`nlp/data_processor.py`) — executes structured queries against the active pandas DataFrame; includes a categorical groupby fallback so "highest category" correctly groups and aggregates instead of erroring on text columns
 - **Response Generator** (`nlp/response_generator.py`) — converts query results into natural language template responses
-- **Voice Input** (`nlp/voice_input.py`) — microphone transcription via SpeechRecognition (Google backend); accepts audio bytes for FastAPI endpoint
+- **Voice Input** (`nlp/voice_input.py`) — microphone transcription via SpeechRecognition (Google backend)
 - **Voice Output** (`nlp/voice_output.py`) — gTTS text-to-speech with UK English female voice (`tld='co.uk'`)
 
 ### Module 3 — Analytics & Prediction
@@ -259,17 +259,66 @@ Performs deep analysis and machine learning forecasting.
 Builds the adaptive analytics dashboard.
 
 - **Data Analysis** (`dashboard/data_analysis.py`) — detects column types (numeric, categorical, datetime), computes correlations, and generates statistical summaries
-- **KPI Generator** (`dashboard/kpi_generator.py`) — produces up to 12 adaptive KPI cards from any dataset; handles sales-specific metrics (total sales, profit margin, avg order value) and generic numeric summaries
+- **KPI Generator** (`dashboard/kpi_generator.py`) — produces up to 12 adaptive KPI cards from any dataset
 - **Visualisation** (`dashboard/visualization.py`) — auto-generates charts (line, bar, doughnut, scatter, heatmap) based on detected column types
-- **Data Cleaning** (`dashboard/data_cleaning.py`) — automated cleaning pipeline with imputation and deduplication; tracks a cleaning report for KPI display
+- **Data Cleaning** (`dashboard/data_cleaning.py`) — automated cleaning pipeline with imputation and deduplication
 
 ### Module 5 — Integration & Interface
 Integrates all modules and builds the user-facing interface.
 
-- **FastAPI Backend** (`api.py`) — 1,700+ line unified API with 30+ endpoints covering auth, upload, dashboard, profiling, quality, chatbot, analytics, prediction, reports, voice, and email scheduling
-- **Frontend** (`frontend/`) — 13 HTML pages with a shared CSS design system; vanilla JS with no framework dependency; Chart.js for visualisation; SheetJS for client-side file parsing
-- **Groq AI Chat** — `chat_message` endpoint builds a dynamic system prompt from the active dataset, runs the NLP pipeline for structured data context, then calls Groq LLaMA 3.3 70B with full conversation history
+- **FastAPI Backend** (`api.py`) — 2,600+ line unified API with 30+ endpoints covering auth, upload, dashboard, profiling, quality, chatbot, analytics, prediction, reports, voice, and email scheduling
+- **Frontend** (`frontend/`) — 13 HTML pages with a shared CSS design system; vanilla JS with no framework dependency
+- **Groq AI Chat** — token-optimised 3-tier chatbot pipeline (see [AI Chatbot](#ai-chatbot) section)
 - **Chatbot Engine** (`chatbot/chatbot_engine.py`) — Streamlit-compatible Groq chatbot with `st.cache_resource` memory management
+
+---
+
+## AI Chatbot
+
+The chatbot uses a 3-tier response architecture designed to maximise answer quality while minimising Groq API token consumption.
+
+### Tier 1 — Instant (Zero Groq tokens)
+Handled entirely in Python with no API call. Covers:
+
+| Question type | Examples |
+|---|---|
+| Greetings | "hi", "hello", "good morning" |
+| Identity / help | "who are you", "what can you do", "introduce yourself" |
+| Thanks / Goodbye | "thanks", "bye", "see you" |
+| KPIs | "total sales", "total profit", "profit margin", "total orders" |
+| Counts | "how many rows", "how many customers", "unique customers" |
+| Averages | "average sales", "avg discount", "mean profit" |
+| Min / Max | "minimum profit", "highest sales value" |
+| Top / Bottom N | "top 5 products by sales", "bottom 3 categories", "worst region" |
+| Comparisons | "compare sales by category", "breakdown by region" |
+| Sub-categories | "top sub-categories by profit" |
+| Trends | "monthly sales trend" → full chronological list + peak month |
+| Yearly | "yearly revenue breakdown" |
+| Shipping | "average shipping delay", "days to ship" |
+| Specific values | "profit for Technology", "sales in West region" |
+| Follow-ups | "what about East?", "and for 2023?" → context-aware filter |
+| Schema | "what columns are there?", "show me the schema" |
+| Data quality | "any missing values?", "show duplicates" |
+
+### Tier 2 — Light Groq call (~500–800 tokens)
+No code generation. Groq answers using a compact KPI summary. Used when question has analytical intent but no precise query can be constructed.
+
+### Tier 3 — Full pipeline (~1,500–2,000 tokens)
+For complex analytical questions:
+1. **Code-gen call** — Groq writes a pandas expression from the capped schema (max 20 columns)
+2. **Execution** — expression is run safely against the real DataFrame in a sandboxed environment
+3. **Answer call** — Groq explains the actual result naturally, with only the last 4 history messages as context
+
+If Groq responds `CANNOT_ANSWER` in step 1, the pipeline returns a helpful static suggestion instead of firing step 3.
+
+### Token savings summary
+
+| Scenario | Before | After |
+|---|---|---|
+| "Who are you?" | ~4,000 tokens | **0 tokens** |
+| "Total sales?" | ~3,500 tokens | **0 tokens** |
+| "Top 5 products by profit?" | ~4,500 tokens | **~1,500 tokens** |
+| "Compare region performance monthly?" | ~5,000 tokens | **~2,000 tokens** |
 
 ---
 
@@ -293,6 +342,7 @@ All endpoints require a `Bearer` JWT token in the `Authorization` header unless 
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/dashboard/metrics` | KPIs, charts, insights, recommendations |
+| `GET` | `/api/dashboard/stream` | Server-sent events stream (30s refresh) |
 | `POST` | `/api/dashboard/upload` | Upload dataset (CSV / Excel / JSON) |
 | `GET` | `/api/profiling` | Full dataset profile |
 | `GET` | `/api/quality` | Data quality report and score |
@@ -303,7 +353,7 @@ All endpoints require a `Bearer` JWT token in the `Authorization` header unless 
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/chat/message` | Send message — returns Groq AI response |
+| `POST` | `/api/chat/message` | Send message — 3-tier AI response |
 | `DELETE` | `/api/chat/history` | Clear conversation history |
 | `GET` | `/api/chat/status` | Debug — confirms Groq connection status |
 
@@ -399,12 +449,12 @@ Edit `.env` and fill in the required values (see [Environment Variables](#enviro
 | `SMTP_USER` | Optional | SMTP username / sender email |
 | `SMTP_PASSWORD` | Optional | SMTP app password |
 | `SMTP_USE_TLS` | Optional | `true` or `false` (default `true`) |
-| `SENDER_EMAIL` | Optional | From address for scheduled emails. Required for Resend and should be verified |
+| `SENDER_EMAIL` | Optional | From address for scheduled emails |
 | `SENDER_NAME` | Optional | Display name for scheduled emails |
 | `DATABASE_URL` | Optional | SQLite path (default `database/scheduler.db`) |
 | `USER_DB_PATH` | Optional | User-account SQLite path. Defaults to `DATABASE_URL` when unset |
 
-> **Note:** Email scheduling is fully optional. You can use either Resend or SMTP. If neither `RESEND_API_KEY` + `SENDER_EMAIL` nor SMTP credentials are set, all email endpoints return a clear "disabled" message and the rest of the app continues normally.
+> **Note:** Email scheduling is fully optional. If neither `RESEND_API_KEY` + `SENDER_EMAIL` nor SMTP credentials are set, all email endpoints return a clear "disabled" message and the rest of the app continues normally.
 
 ---
 
@@ -443,7 +493,7 @@ uvicorn api:app --host 0.0.0.0 --port $PORT
 
 - Set all environment variables in your hosting platform's dashboard — do not upload `.env` to production
 - The `data/uploads/` directory is git-ignored; configure persistent storage if your platform uses ephemeral filesystems
-- Point `DATABASE_URL` (and optionally `USER_DB_PATH`) to persistent storage in production if you want scheduled reports and new user accounts to survive redeploys
+- Point `DATABASE_URL` (and optionally `USER_DB_PATH`) to persistent storage in production
 - Email scheduler is optional — the app runs fully without SMTP credentials
 - Voice features degrade gracefully if browser audio or backend voice dependencies are unavailable
 - Rotate any credentials that were ever committed or exposed before deploying
@@ -531,6 +581,3 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the branching strategy, commit conven
 **Zero Click AI** &nbsp;·&nbsp; Genesis Training &nbsp;·&nbsp; Python & AI Internship &nbsp;·&nbsp; Powered by Groq AI
 
 </div>
-=======
-Python 3.11 · Streamlit · Groq API · Pandas · fpdf2 · openpyxl · streamlit-float
->>>>>>> team/team5-integration
