@@ -726,113 +726,358 @@ def _detect_metric_column_from_question(question: str, df: pd.DataFrame) -> Opti
     return _find_numeric_target_column(df)
 
 
-def _try_structured_chat_response(question: str, df: Optional[pd.DataFrame], meta: dict) -> Optional[str]:
+def _try_structured_chat_response(question: str, df: Optional[pd.DataFrame], meta: dict, history: list = None) -> Optional[str]:
+    import re as _re
     lower = question.strip().lower()
     if not lower:
         return "Ask me about your dataset, KPIs, or the current filters."
 
-    greeting_patterns = [
-        "hi", "hello", "hey", "thanks", "thank you", "bye",
-        "good morning", "good afternoon", "good evening", "how are you",
+    # Fix #12: Follow-up question detection
+    # Detect short follow-ups like "what about West?", "and for 2023?", "how about Technology?"
+    history = history or []
+    _followup_triggers = ("what about", "how about", "and for", "and the", "what of",
+                          "now for", "same for", "also for", "for the")
+    is_followup = any(lower.startswith(t) for t in _followup_triggers) or (
+        len(lower.split()) <= 4 and not any(lower.startswith(g) for g in
+            ["hi", "hello", "hey", "help", "who", "what", "show", "list", "top",
+             "total", "how many", "compare", "trend"])
+    )
+    if is_followup and history and df is not None and not df.empty:
+        import re as _re_fu
+        # Extract the filter value from the question (last 1-2 words)
+        filter_val = _re_fu.sub(
+            r"^(what about|how about|and for|and the|what of|now for|same for|also for|for the)\s*",
+            "", lower
+        ).strip().rstrip("?")
+        if filter_val:
+            # Look up all categorical columns and see if filter_val matches a value
+            cat_cols = [_find_category_column(df), _find_region_column(df)]
+            for gc in cat_cols:
+                if not gc:
+                    continue
+                unique_vals = df[gc].dropna().astype(str).str.lower().unique()
+                matched = next((v for v in unique_vals if filter_val in v or v in filter_val), None)
+                if matched:
+                    mask = df[gc].astype(str).str.lower() == matched
+                    sub_df = df[mask]
+                    if sub_df.empty:
+                        continue
+                    display = df[gc][mask].iloc[0]
+                    # Infer what the last answer was about from history
+                    last_bot = next(
+                        (h["content"] for h in reversed(history) if h["role"] == "assistant"), ""
+                    )
+                    target_col = _find_numeric_target_column(sub_df)
+                    if "profit" in last_bot.lower() and "Profit" in sub_df.columns:
+                        target_col = "Profit"
+                    elif "sales" in last_bot.lower() and "Sales" in sub_df.columns:
+                        target_col = "Sales"
+                    elif "revenue" in last_bot.lower() and "Sales" in sub_df.columns:
+                        target_col = "Sales"
+                    if target_col and target_col in sub_df.columns:
+                        total = sub_df[target_col].sum()
+                        money = target_col in {"Sales", "Revenue", "Profit"}
+                        avg = sub_df[target_col].mean()
+                        return (
+                            f"For {display}: {target_col} total is "
+                            f"{_format_chat_metric(total, money=money)}, "
+                            f"avg {_format_chat_metric(avg, money=money)} "
+                            f"across {len(sub_df):,} records."
+                        )
+
+    # Greetings
+    _greet = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "how are you"]
+    if any(lower == g or lower.startswith(g + " ") or lower.startswith(g + "!") or lower.startswith(g + ",") for g in _greet):
+        return "Hi! I can help with KPIs, trends, top performers, comparisons, data quality, and more. What would you like to know?"
+
+    # Thanks / Bye  (#18 fix)
+    if any(lower == g or lower.startswith(g) for g in ["thanks", "thank you", "cheers", "bye", "goodbye", "see you"]):
+        return "You're welcome! Let me know if you have any other questions about the data."
+
+    # Identity / help  (#1 fix — zero token)
+    _identity = [
+        "who are you", "what are you", "what can you do", "what do you do",
+        "tell me about yourself", "tell me about you", "what is this",
+        "what is zero click", "what is caesar", "what is this chatbot",
+        "help me", "help", "how can you help", "how do you work",
+        "what kind of questions", "what questions can i ask",
+        "what should i ask", "what can i ask",
+        "are you an ai", "are you a bot", "are you human",
+        "introduce yourself", "your name", "who made you",
     ]
-    if any(lower == g or lower.startswith(g + " ") or lower.startswith(g + "!") or lower.startswith(g + ",")
-           for g in greeting_patterns):
-        return "Hi! I can help with KPIs, trends, top performers, data quality, and the current dataset."
+    if any(p in lower for p in _identity):
+        return (
+            "I'm your AI Dataset Assistant. Here's what you can ask:\n"
+            "\u2022 KPIs: 'total sales', 'profit margin', 'total orders'\n"
+            "\u2022 Top/Bottom: 'top 5 products by sales', 'worst region by profit'\n"
+            "\u2022 Comparisons: 'compare sales by category', 'breakdown by region'\n"
+            "\u2022 Trends: 'monthly sales trend', 'yearly revenue breakdown'\n"
+            "\u2022 Data quality: 'any missing values?', 'show duplicates'\n"
+            "\u2022 Stats: 'average discount', 'min profit', 'unique customers'"
+        )
 
     if df is None or df.empty:
         return "No data is loaded for the current filters yet."
 
+    # Setup
     metric_col = _detect_metric_column_from_question(question, df)
     money_metric = metric_col in {"Sales", "Revenue", "Profit"}
     kpis = _build_kpis_dict(df)
+    numeric_target = _find_numeric_target_column(df)
 
-    if any(term in lower for term in ("row count", "record count", "how many rows", "how many records", "number of rows", "number of records")):
+    def _money(col): return col in {"Sales", "Revenue", "Profit"}
+
+    def _groupby_answer(group_col, target_col, ascending=False, top_n=None, label=""):
+        """Generic groupby helper — avoids repeating the same pattern."""
+        if not group_col or not target_col:
+            return None
+        if not pd.api.types.is_numeric_dtype(df[target_col]):
+            return None
+        grouped = df.groupby(group_col)[target_col].sum().sort_values(ascending=ascending)
+        if grouped.empty:
+            return None
+        if top_n:
+            grouped = grouped.head(top_n)
+            money = _money(target_col)
+            lines = [f"{i+1}. {lbl} ({_format_chat_metric(v, money=money)})" for i,(lbl,v) in enumerate(grouped.items())]
+            return (label or f"Top {top_n} by {target_col.lower()}") + ":\n" + "\n".join(lines)
+        money = _money(target_col)
+        direction = "lowest" if ascending else "top"
+        return f"{grouped.index[0]} has the {direction} {target_col.lower()} at {_format_chat_metric(grouped.iloc[0], money=money)}."
+
+    # Row count
+    if any(t in lower for t in ("row count", "record count", "how many rows", "how many records",
+                                "number of rows", "number of records", "total records")):
         return f"There are {len(df):,} records in the current filtered dataset."
 
-    if any(term in lower for term in ("column", "schema", "field")):
-        preview = ", ".join(df.columns.tolist()[:10])
-        suffix = "..." if len(df.columns) > 10 else ""
-        return f"This dataset has {len(df.columns)} columns: {preview}{suffix}"
+    # Columns / schema
+    if any(t in lower for t in ("column", "schema", "field", "what data", "what information")):
+        cols = df.columns.tolist()
+        preview = ", ".join(cols[:10])
+        suffix = f" ... and {len(cols)-10} more" if len(cols) > 10 else ""
+        return f"This dataset has {len(cols)} columns: {preview}{suffix}."
 
-    if "dataset" in lower and any(term in lower for term in ("what", "which", "current", "loaded", "upload")):
+    # Dataset name
+    if "dataset" in lower and any(t in lower for t in ("what", "which", "current", "loaded", "upload")):
         dataset_name = meta.get("filename") or meta.get("datasetName") or "the current dataset"
-        return f"You are working with {dataset_name}, filtered to {len(df):,} rows."
+        return f"You are working with '{dataset_name}', filtered to {len(df):,} rows."
 
-    if any(term in lower for term in ("total sales", "sales total", "total revenue", "revenue total")) and _is_sales_compatible(df):
-        return f"Total sales for the current filters are {_format_chat_metric(kpis['total_sales'], money=True)}."
+    # Total sales
+    if any(t in lower for t in ("total sales", "sales total", "total revenue", "revenue total")) and _is_sales_compatible(df):
+        return f"Total sales for the current filters: {_format_chat_metric(kpis['total_sales'], money=True)}."
 
-    if any(term in lower for term in ("total profit", "profit total")) and "Profit" in df.columns:
-        return f"Total profit for the current filters is {_format_chat_metric(kpis['total_profit'], money=True)}."
+    # Total profit
+    if any(t in lower for t in ("total profit", "profit total", "net profit")) and "Profit" in df.columns:
+        return f"Total profit for the current filters: {_format_chat_metric(kpis['total_profit'], money=True)}."
 
+    # Profit margin
     if "profit margin" in lower and kpis["total_sales"]:
         margin = (kpis["total_profit"] / kpis["total_sales"]) * 100
-        return f"Profit margin for the current filters is {margin:,.1f}%."
+        return f"Profit margin for the current filters: {margin:,.1f}%."
 
-    if any(term in lower for term in ("total orders", "number of orders", "how many orders")):
-        return f"Total orders for the current filters are {kpis['total_orders']:,}."
+    # Orders
+    if any(t in lower for t in ("total orders", "number of orders", "how many orders", "order count")):
+        return f"Total orders for the current filters: {kpis['total_orders']:,}."
 
-    if any(term in lower for term in ("total quantity", "units sold", "quantity sold")) and "Quantity" in df.columns:
-        return f"Total quantity for the current filters is {kpis['total_quantity']:,}."
+    # Quantity
+    if any(t in lower for t in ("total quantity", "units sold", "quantity sold", "total units")) and "Quantity" in df.columns:
+        return f"Total quantity sold: {kpis['total_quantity']:,} units."
 
-    if any(term in lower for term in ("average", "avg", "mean")) and metric_col in df.columns:
-        series = pd.to_numeric(df[metric_col], errors="coerce").dropna()
-        if not series.empty:
-            return (
-                f"The average {metric_col.lower()} for the current filters is "
-                f"{_format_chat_metric(series.mean(), money=money_metric)}."
-            )
+    # Customers  (#8 fix)
+    if any(t in lower for t in ("unique customers", "how many customers", "number of customers",
+                                "customer count", "total customers")):
+        cust_col = "Customer ID" if "Customer ID" in df.columns else next(
+            (c for c in df.columns if "customer" in c.lower()), None)
+        if cust_col:
+            count = int(df[cust_col].nunique())
+            return f"There are {count:,} unique customers in the current filtered dataset."
 
-    if any(term in lower for term in ("top region", "best region", "highest region", "leading region")):
-        region_col = _find_region_column(df)
-        target_col = metric_col if metric_col in df.columns and metric_col != "Order ID" else _find_numeric_target_column(df)
-        if region_col and target_col:
-            grouped = df.groupby(region_col)[target_col].sum().sort_values(ascending=False)
+    # Shipping / delivery  (#9 fix)
+    if any(t in lower for t in ("shipping", "delivery", "ship time", "shipping delay", "days to ship", "avg ship")):
+        if "shipping_delay_days" in df.columns:
+            avg_ship = float(df["shipping_delay_days"].mean())
+            if not pd.isna(avg_ship):
+                return f"Average shipping delay: {avg_ship:.1f} days for the current filters."
+        elif "Ship Date" in df.columns and "Order Date" in df.columns:
+            delay = (pd.to_datetime(df["Ship Date"], errors="coerce") -
+                     pd.to_datetime(df["Order Date"], errors="coerce")).dt.days.mean()
+            if not pd.isna(delay):
+                return f"Average shipping delay: {delay:.1f} days for the current filters."
+
+    # Discount
+    if any(t in lower for t in ("discount", "avg discount", "average discount")) and "Discount" in df.columns:
+        avg_disc = float(df["Discount"].mean()) * 100
+        return f"Average discount rate: {avg_disc:.1f}% for the current filters."
+
+    # Average / Mean  (#3 fix — works even without pre-detected metric_col)
+    avg_col = metric_col if metric_col and metric_col in df.columns else numeric_target
+    if any(t in lower for t in ("average", "avg", "mean")) and avg_col:
+        if pd.api.types.is_numeric_dtype(df[avg_col]):
+            val = pd.to_numeric(df[avg_col], errors="coerce").mean()
+            if not pd.isna(val):
+                return f"Average {avg_col.lower()}: {_format_chat_metric(val, money=_money(avg_col))}."
+
+    # Min / Lowest single value  (#10 fix)
+    min_col = metric_col if metric_col and metric_col in df.columns else numeric_target
+    if any(t in lower for t in ("minimum", "min value", "lowest value", "smallest")) and min_col:
+        if pd.api.types.is_numeric_dtype(df[min_col]):
+            val = pd.to_numeric(df[min_col], errors="coerce").min()
+            if not pd.isna(val):
+                return f"Minimum {min_col.lower()}: {_format_chat_metric(val, money=_money(min_col))}."
+
+    # Max / Highest single value
+    max_col = metric_col if metric_col and metric_col in df.columns else numeric_target
+    if any(t in lower for t in ("maximum", "max value", "highest value", "largest value")) and max_col:
+        if pd.api.types.is_numeric_dtype(df[max_col]):
+            val = pd.to_numeric(df[max_col], errors="coerce").max()
+            if not pd.isna(val):
+                return f"Maximum {max_col.lower()}: {_format_chat_metric(val, money=_money(max_col))}."
+
+    # Compare / Breakdown  (#5 fix)
+    _cmp = ("compare", "breakdown", "split by", "group by", "by region", "by category",
+            "across regions", "across categories", "per region", "per category",
+            "for each region", "for each category")
+    if any(t in lower for t in _cmp):
+        if any(t in lower for t in ("region", "state", "country", "city", "location")):
+            group_col = _find_region_column(df)
+        elif any(t in lower for t in ("sub-category", "subcategory")):
+            group_col = next((c for c in df.columns if "sub" in c.lower() and "cat" in c.lower()), _find_category_column(df))
+        else:
+            group_col = _find_category_column(df)
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        if group_col and target_col and pd.api.types.is_numeric_dtype(df[target_col]):
+            grouped = df.groupby(group_col)[target_col].sum().sort_values(ascending=False)
             if not grouped.empty:
-                return (
-                    f"{grouped.index[0]} is the top region by {target_col.lower()} at "
-                    f"{_format_chat_metric(grouped.iloc[0], money=target_col in {'Sales', 'Revenue', 'Profit'})}."
-                )
+                money = _money(target_col)
+                lines = [f"  {lbl}: {_format_chat_metric(v, money=money)}" for lbl, v in grouped.items()]
+                return f"{target_col} breakdown by {group_col}:\n" + "\n".join(lines)
 
-    if any(term in lower for term in ("top category", "best category", "highest category", "leading category")):
-        category_col = _find_category_column(df)
-        target_col = metric_col if metric_col in df.columns and metric_col != "Order ID" else _find_numeric_target_column(df)
-        if category_col and target_col:
-            grouped = df.groupby(category_col)[target_col].sum().sort_values(ascending=False)
+    # Sub-category breakdown  (#11 fix)
+    if any(t in lower for t in ("sub-category", "subcategory", "sub category")):
+        subcat_col = next((c for c in df.columns if "sub" in c.lower() and "cat" in c.lower()), None)
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        if subcat_col and target_col and pd.api.types.is_numeric_dtype(df[target_col]):
+            grouped = df.groupby(subcat_col)[target_col].sum().sort_values(ascending=False).head(10)
             if not grouped.empty:
-                return (
-                    f"{grouped.index[0]} is the top category by {target_col.lower()} at "
-                    f"{_format_chat_metric(grouped.iloc[0], money=target_col in {'Sales', 'Revenue', 'Profit'})}."
-                )
+                money = _money(target_col)
+                lines = [f"{i+1}. {lbl} ({_format_chat_metric(v, money=money)})" for i,(lbl,v) in enumerate(grouped.items())]
+                return f"Top sub-categories by {target_col.lower()}:\n" + "\n".join(lines)
 
-    if any(term in lower for term in ("top product", "best product", "top 5 products", "highest product")):
+    # Bottom/Worst region  (#4 fix)
+    _region_worst = ("worst region", "lowest region", "bottom region", "least region",
+                     "which region has the lowest", "which region has the least",
+                     "region with the lowest", "region with the least")
+    _region_best = ("top region", "best region", "highest region", "leading region",
+                    "which region", "region with the highest", "region with the most",
+                    "region with the best", "region has the highest", "region has the most")
+    if any(t in lower for t in _region_worst):
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        ans = _groupby_answer(_find_region_column(df), target_col, ascending=True)
+        if ans: return ans
+    elif any(t in lower for t in _region_best):
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        ans = _groupby_answer(_find_region_column(df), target_col, ascending=False)
+        if ans: return ans
+
+    # Bottom/Worst category  (#4 fix)
+    _cat_worst = ("worst category", "lowest category", "bottom category", "least category",
+                  "which category has the lowest", "which category has the least",
+                  "category with the lowest", "category with the least")
+    _cat_best = ("top category", "best category", "highest category", "leading category",
+                 "which category", "category with the highest", "category with the most",
+                 "category with the best", "category has the highest", "category has the most")
+    if any(t in lower for t in _cat_worst):
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        ans = _groupby_answer(_find_category_column(df), target_col, ascending=True)
+        if ans: return ans
+    elif any(t in lower for t in _cat_best):
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        ans = _groupby_answer(_find_category_column(df), target_col, ascending=False)
+        if ans: return ans
+
+    # Top / Bottom N products  (#4, #16 fix — dynamic N)
+    _prod_best = ("top product", "best product", "top 5 product", "top 10 product",
+                  "highest product", "product names", "top product names", "top products",
+                  "what are the top", "show top", "list top")
+    _prod_worst = ("worst product", "bottom product", "lowest product", "least product")
+    n_match = _re.search(r"top\s+(\d+)|bottom\s+(\d+)|worst\s+(\d+)", lower)
+    top_n = int(next(g for g in n_match.groups() if g) if n_match else 5)
+    top_n = min(top_n, 20)
+    if any(t in lower for t in _prod_worst):
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        ans = _groupby_answer(_find_item_column(df), target_col, ascending=True, top_n=top_n,
+                              label=f"Bottom {top_n} by {(target_col or 'items').lower()}")
+        if ans: return ans
+    elif any(t in lower for t in _prod_best):
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        ans = _groupby_answer(_find_item_column(df), target_col, ascending=False, top_n=top_n,
+                              label=f"Top {top_n} by {(target_col or 'items').lower()}")
+        if ans:
+            return ans
+        # Fallback: list items by frequency if no numeric target
         item_col = _find_item_column(df)
-        target_col = metric_col if metric_col in df.columns and metric_col != "Order ID" else _find_numeric_target_column(df)
-        if item_col and target_col:
-            grouped = df.groupby(item_col)[target_col].sum().sort_values(ascending=False).head(5)
-            if not grouped.empty:
-                lines = [
-                    f"{idx + 1}. {label} ({_format_chat_metric(value, money=target_col in {'Sales', 'Revenue', 'Profit'})})"
-                    for idx, (label, value) in enumerate(grouped.items())
-                ]
-                return "Top products for the current filters:\n" + "\n".join(lines)
+        if item_col:
+            top_items = df[item_col].dropna().value_counts().head(top_n)
+            lines = [f"{i+1}. {lbl}" for i, lbl in enumerate(top_items.index)]
+            return f"Top {top_n} {item_col} values:\n" + "\n".join(lines)
 
-    if any(term in lower for term in ("trend", "month", "monthly", "over time", "year")):
+    # Monthly trend — chronological list  (#7, #14 fix)
+    if any(t in lower for t in ("trend", "monthly", "over time", "by month", "month by month")):
         date_col = _find_datetime_column(df.copy())
-        target_col = metric_col if metric_col in df.columns and metric_col != "Order ID" else _find_numeric_target_column(df)
-        if date_col and target_col:
-            trend_df = df[[date_col, target_col]].copy()
-            trend_df[date_col] = pd.to_datetime(trend_df[date_col], errors="coerce")
-            trend_df[target_col] = pd.to_numeric(trend_df[target_col], errors="coerce")
-            trend_df = trend_df.dropna(subset=[date_col, target_col])
-            if not trend_df.empty:
-                trend_df["_period"] = trend_df[date_col].dt.to_period("M").astype(str)
-                grouped = trend_df.groupby("_period")[target_col].sum().sort_values(ascending=False)
-                if not grouped.empty:
-                    return (
-                        f"The strongest month for {target_col.lower()} is {grouped.index[0]} "
-                        f"with {_format_chat_metric(grouped.iloc[0], money=target_col in {'Sales', 'Revenue', 'Profit'})}."
-                    )
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        if date_col and target_col and pd.api.types.is_numeric_dtype(df[target_col]):
+            td = df[[date_col, target_col]].copy()
+            td[date_col] = pd.to_datetime(td[date_col], errors="coerce")
+            td[target_col] = pd.to_numeric(td[target_col], errors="coerce")
+            td = td.dropna(subset=[date_col, target_col])
+            if not td.empty:
+                td["_period"] = td[date_col].dt.to_period("M").astype(str)
+                monthly = td.groupby("_period")[target_col].sum().sort_index()  # chronological
+                if not monthly.empty:
+                    money = _money(target_col)
+                    lines = [f"  {p}: {_format_chat_metric(v, money=money)}" for p, v in monthly.items()]
+                    best = monthly.idxmax()
+                    return (f"Monthly {target_col.lower()} trend:\n" + "\n".join(lines) +
+                            f"\n\nPeak: {best} ({_format_chat_metric(monthly[best], money=money)})")
 
+    # Yearly breakdown
+    if "year" in lower and any(t in lower for t in ("trend", "by year", "each year", "annual", "yearly", "per year")):
+        date_col = _find_datetime_column(df.copy())
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        if date_col and target_col and pd.api.types.is_numeric_dtype(df[target_col]):
+            td = df[[date_col, target_col]].copy()
+            td[date_col] = pd.to_datetime(td[date_col], errors="coerce")
+            td[target_col] = pd.to_numeric(td[target_col], errors="coerce")
+            td = td.dropna(subset=[date_col, target_col])
+            if not td.empty:
+                td["_yr"] = td[date_col].dt.year.astype(str)
+                yearly = td.groupby("_yr")[target_col].sum().sort_index()
+                money = _money(target_col)
+                lines = [f"  {yr}: {_format_chat_metric(v, money=money)}" for yr, v in yearly.items()]
+                return f"Yearly {target_col.lower()} breakdown:\n" + "\n".join(lines)
+
+    # Specific value filter: "profit for Technology", "sales in West region"
+    # Catches: "X for [value]", "X in [value]", "[value] X"
+    _filter_preps = (" for ", " in ", " of ")
+    if any(prep in lower for prep in _filter_preps) and metric_col and metric_col in df.columns:
+        cat_col = _find_category_column(df)
+        reg_col = _find_region_column(df)
+        for group_col in [cat_col, reg_col]:
+            if not group_col:
+                continue
+            unique_vals = df[group_col].dropna().astype(str).str.lower().unique().tolist()
+            matched_val = next((v for v in unique_vals if v in lower), None)
+            if matched_val and pd.api.types.is_numeric_dtype(df[metric_col]):
+                mask = df[group_col].astype(str).str.lower() == matched_val
+                filtered = df[mask]
+                if not filtered.empty:
+                    total = filtered[metric_col].sum()
+                    display_val = df[group_col][mask].iloc[0]  # original casing
+                    return (f"{metric_col} for {display_val}: "
+                            f"{_format_chat_metric(total, money=_money(metric_col))}."
+                            f" ({len(filtered):,} records)")
+
+    # NLP pipeline fallback (schema/quality/profiling/aggregation intents)
     if HAS_NLP:
         try:
             parsed = process_query(question, df=df, dataset_meta=meta)
@@ -1591,8 +1836,6 @@ async def stream(
     _user: dict = Depends(get_current_user),  # Fix 4 — stream auth
 ):
     async def gen():
-        while True:
-            df = _get_df(_user)
             if df is not None:
                 f = _apply_filters(df, category, region, year, profit)
                 payload = json.dumps({
@@ -1706,19 +1949,34 @@ def _safe_execute(code: str, df: pd.DataFrame) -> tuple[bool, str]:
 
 
 def _build_schema_prompt(df: pd.DataFrame) -> str:
-    """Build a compact schema description for the code-generation prompt."""
+    """Build a compact schema description for the code-generation prompt.
+    Capped at 20 columns and trimmed sample values to keep prompts token-efficient.
+    """
     lines = ["DataFrame variable name: df"]
     lines.append(f"Shape: {len(df):,} rows × {len(df.columns)} columns")
     lines.append("")
-    lines.append("Columns (name | dtype | sample values):")
-    for col in df.columns:
+    # Cap at 20 columns — prioritise numeric and known-important columns
+    all_cols = df.columns.tolist()
+    important = [c for c in all_cols if c in {
+        "Sales", "Profit", "Revenue", "Quantity", "Discount",
+        "Order ID", "Customer ID", "Region", "Category", "Sub-Category",
+        "Product Name", "Order Date", "Ship Date", "shipping_delay_days",
+    }]
+    remaining = [c for c in all_cols if c not in important]
+    cols_to_show = (important + remaining)[:20]
+    if len(all_cols) > 20:
+        lines.append(f"Columns (showing 20 of {len(all_cols)} — name | dtype | sample values):")
+    else:
+        lines.append("Columns (name | dtype | sample values):")
+    for col in cols_to_show:
         dtype = str(df[col].dtype)
         try:
             if pd.api.types.is_numeric_dtype(df[col]):
-                sample = f"min={df[col].min():,.2f}, max={df[col].max():,.2f}, mean={df[col].mean():,.2f}"
+                # Compact: only min/max
+                sample = f"min={df[col].min():,.1f}, max={df[col].max():,.1f}"
             else:
-                top = df[col].dropna().value_counts().head(4).index.tolist()
-                sample = ", ".join(str(v) for v in top)
+                top = df[col].dropna().value_counts().head(3).index.tolist()
+                sample = ", ".join(str(v)[:20] for v in top)  # truncate long values
         except Exception:
             sample = "N/A"
         lines.append(f"  - {col} ({dtype}): {sample}")
@@ -1804,8 +2062,8 @@ Your personality: warm, direct, confident. Give real answers with real numbers.
 - For greetings: respond warmly and briefly
 - For data questions: lead with the number, then a short insight
 - Keep it 1-4 sentences
-- Never say "I cannot find" or "data is unavailable"
-- If completely unrelated to the dataset, say you're here to help with the data"""
+- If data is missing or filters returned nothing, say so honestly
+- For questions completely unrelated to data, say you're here to help with the dataset"""
 
     return [
         {"role": "system", "content": system},
@@ -1827,7 +2085,7 @@ def chat_message(req: ChatRequest, _user: dict = Depends(get_current_user)):
     if len(_chat_history[email]) > 20:
         _chat_history[email] = _chat_history[email][-20:]
 
-    fast_response = _try_structured_chat_response(req.message, filtered_df, meta)
+    fast_response = _try_structured_chat_response(req.message, filtered_df, meta, history=_chat_history.get(email, []))
     if fast_response:
         _chat_history[email].append({"role": "assistant", "content": fast_response})
         return {
@@ -1853,6 +2111,7 @@ def chat_message(req: ChatRequest, _user: dict = Depends(get_current_user)):
         return {"reply": response, "intent": None, "history": _chat_history[email][-6:], "suggestions": meta.get("suggestions", [])}
 
     query_result = None
+    groq_said_cannot_answer = False
     is_data_question = filtered_df is not None and not filtered_df.empty
 
     # ── Step 1: Detect if this is a data question or a greeting/chitchat ──────
@@ -1863,8 +2122,23 @@ def chat_message(req: ChatRequest, _user: dict = Depends(get_current_user)):
     is_greeting = any(msg_lower == g or msg_lower.startswith(g + " ") or msg_lower.startswith(g + "!") or msg_lower.startswith(g + ",")
                       for g in greeting_patterns)
 
-    # ── Step 2: Generate and execute pandas code (only for data questions) ────
-    if is_data_question and not is_greeting:
+    # Fix 4: Skip code-gen entirely if question has no data-related terms.
+    # Prevents burning tokens on questions like "who are you", "what can you do".
+    _DATA_TERMS = {
+        "total", "sum", "average", "avg", "mean", "count", "max", "min",
+        "top", "bottom", "highest", "lowest", "trend", "compare", "by region",
+        "by category", "profit", "sales", "revenue", "order", "quantity",
+        "discount", "month", "year", "over time", "performance", "product",
+        "customer", "row", "record", "column", "field", "schema", "missing",
+        "duplicate", "quality", "outlier", "forecast", "predict", "growth",
+        "how many", "what is the", "show me", "list", "find",
+    }
+    has_data_terms = any(term in msg_lower for term in _DATA_TERMS)
+    if not has_data_terms and filtered_df is not None:
+        has_data_terms = any(col.lower() in msg_lower for col in filtered_df.columns)
+
+    # ── Step 2: Generate and execute pandas code (only for real data questions) ─
+    if is_data_question and not is_greeting and has_data_terms:
         try:
             code_messages = _build_code_gen_prompt(filtered_df, req.message)
             code_resp = groq.chat.completions.create(
@@ -1875,23 +2149,40 @@ def chat_message(req: ChatRequest, _user: dict = Depends(get_current_user)):
             )
             generated_code = code_resp.choices[0].message.content.strip()
 
-            if generated_code and generated_code != "CANNOT_ANSWER":
+            groq_said_cannot_answer = (generated_code == "CANNOT_ANSWER")
+            if generated_code and not groq_said_cannot_answer:
                 success, result_str = _safe_execute(generated_code, filtered_df)
                 if success:
                     query_result = result_str
         except Exception:
+            groq_said_cannot_answer = False
             query_result = None  # fall through to summary-based answer
+    else:
+        groq_said_cannot_answer = False
+
+    # Fix #6: if Groq said CANNOT_ANSWER and we have no query result,
+    # return a static response instead of burning a second Groq call.
+    if groq_said_cannot_answer and query_result is None:
+        static = (
+            "I wasn't able to build a data query for that. Try asking something like:\n"
+            "\u2022 'What is the total sales by region?'\n"
+            "\u2022 'Top 5 products by profit'\n"
+            "\u2022 'Average discount for Technology category'"
+        )
+        _chat_history[email].append({"role": "assistant", "content": static})
+        return {"reply": static, "intent": "cannot_answer",
+                "history": _chat_history[email][-6:], "suggestions": meta.get("suggestions", [])}
 
     # ── Step 3: Generate natural language answer ──────────────────────────────
     try:
         answer_messages = _build_answer_prompt(filtered_df, meta, req.message, query_result)
 
-        # Inject conversation history for follow-up context
-        # Insert history between system and the final user message
+        # Fix 3: Inject only last 4 history messages (2 turns) to cap token use.
         system_msg = answer_messages[0]
         user_msg   = answer_messages[1]
         full_messages = [system_msg]
-        for h in _chat_history[email][:-1]:   # exclude just-appended user msg
+        recent_history = _chat_history[email][:-1]
+        for h in recent_history[-4:]:
             full_messages.append({"role": h["role"], "content": h["content"]})
         full_messages.append(user_msg)
 
