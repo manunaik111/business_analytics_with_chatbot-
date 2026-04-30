@@ -402,6 +402,7 @@ Edit `.env` and fill in the required values (see [Environment Variables](#enviro
 | `SENDER_EMAIL` | Optional | From address for scheduled emails. Required for Resend and should be verified |
 | `SENDER_NAME` | Optional | Display name for scheduled emails |
 | `DATABASE_URL` | Optional | SQLite path (default `database/scheduler.db`) |
+| `USER_DB_PATH` | Optional | User-account SQLite path. Defaults to `DATABASE_URL` when unset |
 
 > **Note:** Email scheduling is fully optional. You can use either Resend or SMTP. If neither `RESEND_API_KEY` + `SENDER_EMAIL` nor SMTP credentials are set, all email endpoints return a clear "disabled" message and the rest of the app continues normally.
 
@@ -442,6 +443,7 @@ uvicorn api:app --host 0.0.0.0 --port $PORT
 
 - Set all environment variables in your hosting platform's dashboard — do not upload `.env` to production
 - The `data/uploads/` directory is git-ignored; configure persistent storage if your platform uses ephemeral filesystems
+- Point `DATABASE_URL` (and optionally `USER_DB_PATH`) to persistent storage in production if you want scheduled reports and new user accounts to survive redeploys
 - Email scheduler is optional — the app runs fully without SMTP credentials
 - Voice features degrade gracefully if browser audio or backend voice dependencies are unavailable
 - Rotate any credentials that were ever committed or exposed before deploying
