@@ -1835,7 +1835,10 @@ async def stream(
     profit:   str = Query("All"),
     _user: dict = Depends(get_current_user),  # Fix 4 — stream auth
 ):
+    df = _get_df(_user)   # fetch once; gen() captures via closure
+
     async def gen():
+        while True:
             if df is not None:
                 f = _apply_filters(df, category, region, year, profit)
                 payload = json.dumps({
