@@ -1,13 +1,22 @@
 """
-email_sender/smtp_client.py
+email_scheduler/smtp_client.py
 FR 5.3 - Steps 30-31: Compose and deliver email with PDF attachment.
 
-Supports either:
-  - SMTP (legacy/default fallback)
-  - Resend Email API
+Supports three providers (in priority order when EMAIL_PROVIDER=auto):
+  1. gmail  — Gmail REST API via OAuth2 (works on Render; sends from your Gmail)
+  2. smtp   — Standard SMTP (works locally; blocked on Render free tier)
+  3. resend — Resend HTTP API fallback
+
+Required env vars for Gmail API (recommended):
+  GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN
+  SENDER_EMAIL=manupnaik639@gmail.com, SENDER_NAME=Zero Click AI
+
+Required env vars for SMTP (local use):
+  SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_USE_TLS
 """
 
 import base64
+import email.utils
 import logging
 import os
 import smtplib
@@ -22,150 +31,347 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Google OAuth2 token endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+_GOOGLE_TOKEN_URL  = "https://oauth2.googleapis.com/token"
+_GMAIL_SEND_URL    = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+
 
 class EmailClient:
     """
     Email client for automated report delivery.
 
-    Reads configuration from environment variables:
-      EMAIL_PROVIDER=auto|smtp|resend
-      RESEND_API_KEY, RESEND_API_BASE
-      SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD/SMTP_PASS, SMTP_USE_TLS
-      SENDER_EMAIL, SENDER_NAME
+    Provider selection (EMAIL_PROVIDER env var):
+      auto   — tries gmail → smtp → resend in order (default)
+      gmail  — force Gmail REST API
+      smtp   — force SMTP (fails on Render free tier)
+      resend — force Resend HTTP API
+
+    Gmail REST API env vars:
+      GMAIL_CLIENT_ID       — OAuth2 client ID from Google Cloud Console
+      GMAIL_CLIENT_SECRET   — OAuth2 client secret
+      GMAIL_REFRESH_TOKEN   — Long-lived refresh token (run get_gmail_token.py once)
+
+    SMTP env vars:
+      SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD / SMTP_PASS, SMTP_USE_TLS
+
+    Common:
+      SENDER_EMAIL  — Your Gmail address (manupnaik639@gmail.com)
+      SENDER_NAME   — Display name in email From header
     """
 
     def __init__(self):
         self.provider_preference = os.getenv("EMAIL_PROVIDER", "auto").strip().lower()
-        self.resend_api_key = os.getenv("RESEND_API_KEY", "").strip()
+
+        # Gmail REST API credentials
+        self.gmail_client_id     = os.getenv("GMAIL_CLIENT_ID",     "").strip()
+        self.gmail_client_secret = os.getenv("GMAIL_CLIENT_SECRET", "").strip()
+        self.gmail_refresh_token = os.getenv("GMAIL_REFRESH_TOKEN", "").strip()
+
+        # SMTP credentials (local fallback)
+        self.host     = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        self.port     = int(os.getenv("SMTP_PORT", "587"))
+        self.user     = os.getenv("SMTP_USER", "").strip()
+        self.password = (os.getenv("SMTP_PASSWORD") or os.getenv("SMTP_PASS", "")).strip()
+        self.use_tls  = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+
+        # Resend (kept as emergency fallback)
+        self.resend_api_key  = os.getenv("RESEND_API_KEY",  "").strip()
         self.resend_api_base = os.getenv("RESEND_API_BASE", "https://api.resend.com").rstrip("/")
 
-        self.host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-        self.port = int(os.getenv("SMTP_PORT", "587"))
-        self.user = os.getenv("SMTP_USER", "").strip()
-        self.password = (os.getenv("SMTP_PASSWORD") or os.getenv("SMTP_PASS", "")).strip()
-        self.use_tls = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
-        self.sender = os.getenv("SENDER_EMAIL", self.user).strip()
-        self.sender_name = os.getenv("SENDER_NAME", "Report Scheduler System")
+        # Common
+        self.sender      = os.getenv("SENDER_EMAIL", self.user).strip()
+        self.sender_name = os.getenv("SENDER_NAME", "Zero Click AI")
 
-        # Auto-detect cloud environments that block outbound SMTP.
-        # RENDER=true is injected automatically by Render into all services.
-        self._smtp_blocked = os.getenv("RENDER", "").lower() in ("true", "1", "yes")
+        # Render injects RENDER=true into all services; SMTP is blocked there.
+        self._on_render = os.getenv("RENDER", "").lower() in ("true", "1", "yes")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Public API
+    # ─────────────────────────────────────────────────────────────────────────
 
     def send_report(self, recipients: list, report_type: str,
                     pdf_path: str, schedule_id: int = None) -> bool:
-        """
-        Step 30-31: Compose email with PDF attachment and send it.
-
-        Args:
-            recipients:  List of recipient email addresses
-            report_type: Report type label used in subject/body
-            pdf_path:    Filesystem path to the generated PDF
-            schedule_id: Schedule reference for email subject line
-
-        Returns:
-            True on success, raises exception on failure
-        """
+        """Compose and send a scheduled report email with PDF attachment."""
         provider = self._resolve_provider()
+        logger.info(f"Sending email via provider={provider} to {recipients}")
+
+        if provider == "gmail":
+            msg = self._compose_mime(recipients, report_type, pdf_path, schedule_id)
+            return self._send_gmail(msg, recipients)
+
+        if provider == "smtp":
+            msg = self._compose_mime(recipients, report_type, pdf_path, schedule_id)
+            return self._send_smtp(msg, recipients)
+
         if provider == "resend":
             payload = self._compose_resend_payload(recipients, report_type, pdf_path, schedule_id)
-            try:
-                return self._send_resend(payload, schedule_id=schedule_id)
-            except RuntimeError as exc:
-                if self._should_fallback_to_smtp(exc):
-                    logger.warning(
-                        "Resend failed with a recoverable configuration error; "
-                        "falling back to SMTP for this send."
-                    )
-                    msg = self._compose_smtp_message(recipients, report_type, pdf_path, schedule_id)
-                    return self._send_smtp(msg, recipients)
-                raise
-        if provider == "smtp":
-            msg = self._compose_smtp_message(recipients, report_type, pdf_path, schedule_id)
-            return self._send_smtp(msg, recipients)
+            return self._send_resend(payload)
+
         raise RuntimeError(
-            "Email is not configured. Set EMAIL_PROVIDER=resend with RESEND_API_KEY "
-            "and SENDER_EMAIL, or configure SMTP_USER and SMTP_PASSWORD."
+            "Email is not configured. "
+            "Set GMAIL_CLIENT_ID + GMAIL_CLIENT_SECRET + GMAIL_REFRESH_TOKEN, "
+            "or SMTP_USER + SMTP_PASS, in your environment variables."
         )
 
     def test_connection(self) -> dict:
-        """Verify configured provider settings and connectivity when possible."""
+        """Check that the configured provider credentials look valid."""
         provider = self._resolve_provider()
-        if provider == "resend":
-            if not self.resend_api_key or not self.sender:
-                return {
-                    "success": False,
-                    "message": "Resend is not configured. Set RESEND_API_KEY and SENDER_EMAIL.",
-                }
-            return {
-                "success": True,
-                "message": "Resend configuration detected. Verify the sender domain in Resend before sending.",
-            }
+        if provider == "gmail":
+            try:
+                token = self._get_gmail_access_token()
+                if token:
+                    return {"success": True,
+                            "message": f"Gmail API ready — will send from {self.sender}"}
+                return {"success": False, "message": "Gmail token exchange returned empty access_token."}
+            except Exception as exc:
+                return {"success": False, "message": f"Gmail token error: {exc}"}
+
         if provider == "smtp":
             if not self.user or not self.password:
-                return {
-                    "success": False,
-                    "message": "SMTP is not configured. Set SMTP_USER and SMTP_PASSWORD (or SMTP_PASS).",
-                }
+                return {"success": False,
+                        "message": "SMTP not configured. Set SMTP_USER and SMTP_PASS."}
             try:
                 with self._connect_smtp():
                     return {"success": True, "message": "SMTP connection successful"}
             except Exception as exc:
                 return {"success": False, "message": str(exc)}
-        return {
-            "success": False,
-            "message": "Email is not configured. Set Resend or SMTP credentials.",
-        }
 
-    def _compose_smtp_message(self, recipients: list, report_type: str,
-                              pdf_path: str, schedule_id: int) -> MIMEMultipart:
-        """Compose an SMTP email with HTML body and PDF attachment."""
+        if provider == "resend":
+            return {"success": True if self.resend_api_key else False,
+                    "message": "Resend key present." if self.resend_api_key else "RESEND_API_KEY not set."}
+
+        return {"success": False, "message": "No email provider configured."}
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # MIME composition (shared by Gmail + SMTP)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _compose_mime(self, recipients: list, report_type: str,
+                      pdf_path: str, schedule_id: int) -> MIMEMultipart:
         report_label = report_type.replace("_", " ").title()
-        date_str = self._report_date()
+        date_str     = self._report_date()
 
         msg = MIMEMultipart("mixed")
-        msg["From"] = self._sender_header("smtp")
-        msg["To"] = ", ".join(recipients)
+        msg["From"]    = f"{self.sender_name} <{self.sender}>"
+        msg["To"]      = ", ".join(recipients)
         msg["Subject"] = self._subject(report_label, date_str)
+        msg["Message-ID"] = email.utils.make_msgid()
 
-        html_body = self._html_email_body(report_label, date_str, schedule_id)
-        msg.attach(MIMEText(html_body, "html"))
+        msg.attach(MIMEText(self._html_email_body(report_label, date_str, schedule_id), "html"))
 
         pdf_file, pdf_data = self._read_attachment(pdf_path)
         if pdf_file and pdf_data is not None:
-            attachment = MIMEApplication(pdf_data, _subtype="pdf")
-            attachment.add_header("Content-Disposition", "attachment", filename=pdf_file.name)
-            msg.attach(attachment)
-            logger.info(f"Attached PDF: {pdf_file.name} ({len(pdf_data):,} bytes)")
+            att = MIMEApplication(pdf_data, _subtype="pdf")
+            att.add_header("Content-Disposition", "attachment", filename=pdf_file.name)
+            msg.attach(att)
+            logger.info(f"Attached {pdf_file.name} ({len(pdf_data):,} bytes)")
 
         return msg
 
-    def _compose_resend_payload(self, recipients: list, report_type: str,
-                                pdf_path: str, schedule_id: int) -> dict:
-        """Compose a Resend API payload with HTML body and PDF attachment."""
-        report_label = report_type.replace("_", " ").title()
-        date_str = self._report_date()
-        payload = {
-            "from": self._sender_header("resend"),
-            "to": recipients,
-            "subject": self._subject(report_label, date_str),
-            "html": self._html_email_body(report_label, date_str, schedule_id),
-            "text": self._plain_text_email_body(report_label, date_str, schedule_id),
-        }
+    # ─────────────────────────────────────────────────────────────────────────
+    # Provider: Gmail REST API  (HTTPS — works on Render free tier)
+    # ─────────────────────────────────────────────────────────────────────────
 
+    def _get_gmail_access_token(self) -> str:
+        """Exchange the stored refresh token for a short-lived access token."""
+        resp = requests.post(
+            _GOOGLE_TOKEN_URL,
+            data={
+                "client_id":     self.gmail_client_id,
+                "client_secret": self.gmail_client_secret,
+                "refresh_token": self.gmail_refresh_token,
+                "grant_type":    "refresh_token",
+            },
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"Gmail token refresh failed ({resp.status_code}): {resp.text}")
+        token = resp.json().get("access_token", "")
+        if not token:
+            raise RuntimeError("Gmail token response had no access_token field.")
+        return token
+
+    def _send_gmail(self, msg: MIMEMultipart, recipients: list) -> bool:
+        """Send via Gmail REST API — HTTPS, never blocked by Render."""
+        try:
+            access_token = self._get_gmail_access_token()
+        except Exception as exc:
+            logger.error(f"Gmail access token error: {exc}")
+            raise RuntimeError(f"Could not obtain Gmail access token: {exc}") from exc
+
+        # RFC 2822 message → URL-safe base64 (Gmail API requirement)
+        raw_bytes  = msg.as_bytes()
+        raw_b64    = base64.urlsafe_b64encode(raw_bytes).decode("ascii")
+
+        resp = requests.post(
+            _GMAIL_SEND_URL,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type":  "application/json",
+            },
+            json={"raw": raw_b64},
+            timeout=30,
+        )
+
+        if resp.status_code not in (200, 201):
+            try:
+                detail = resp.json()
+            except ValueError:
+                detail = resp.text
+            raise RuntimeError(f"Gmail API send error ({resp.status_code}): {detail}")
+
+        msg_id = resp.json().get("id", "?")
+        logger.info(f"Email sent via Gmail API to {recipients} (id={msg_id})")
+        return True
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Provider: SMTP  (works locally; blocked on Render free tier)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _connect_smtp(self) -> smtplib.SMTP:
+        """Open an authenticated SMTP connection."""
+        server = smtplib.SMTP(self.host, self.port, timeout=30)
+        server.ehlo()
+        if self.use_tls:
+            server.starttls()
+            server.ehlo()
+        if self.user and self.password:
+            server.login(self.user, self.password)
+        return server
+
+    def _send_smtp(self, msg: MIMEMultipart, recipients: list) -> bool:
+        """Transmit via SMTP."""
+        try:
+            with self._connect_smtp() as server:
+                failed = server.sendmail(self.sender or self.user, recipients, msg.as_string())
+            if failed:
+                logger.warning(f"SMTP: some recipients failed: {failed}")
+            else:
+                logger.info(f"Email sent via SMTP to {recipients}")
+            return True
+        except smtplib.SMTPAuthenticationError:
+            logger.error("SMTP auth failed. Check SMTP_USER / SMTP_PASS.")
+            raise
+        except OSError as exc:
+            if "unreachable" in str(exc).lower() or "101" in str(exc):
+                raise RuntimeError(
+                    "SMTP is blocked on this server (Render free tier blocks SMTP). "
+                    "Set GMAIL_CLIENT_ID + GMAIL_CLIENT_SECRET + GMAIL_REFRESH_TOKEN "
+                    "to use Gmail REST API instead."
+                ) from exc
+            raise
+        except Exception as exc:
+            logger.exception(f"SMTP send failed: {exc}")
+            raise
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Provider: Resend  (emergency fallback)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _compose_resend_payload(self, recipients, report_type, pdf_path, schedule_id) -> dict:
+        report_label = report_type.replace("_", " ").title()
+        date_str     = self._report_date()
+        payload = {
+            "from":    f"{self.sender_name} <{self.sender}>",
+            "to":      recipients,
+            "subject": self._subject(report_label, date_str),
+            "html":    self._html_email_body(report_label, date_str, schedule_id),
+            "text":    self._plain_text_email_body(report_label, date_str, schedule_id),
+        }
         pdf_file, pdf_data = self._read_attachment(pdf_path)
-        if pdf_file and pdf_data is not None:
+        if pdf_file and pdf_data:
             payload["attachments"] = [{
                 "filename": pdf_file.name,
-                "content": base64.b64encode(pdf_data).decode("ascii"),
+                "content":  base64.b64encode(pdf_data).decode("ascii"),
             }]
-            logger.info(f"Attached PDF for Resend: {pdf_file.name} ({len(pdf_data):,} bytes)")
-
         return payload
 
-    def _html_email_body(self, report_label: str, date_str: str, schedule_id: int) -> str:
-        """Render an HTML email body."""
-        return f"""
-<!DOCTYPE html>
+    def _send_resend(self, payload: dict) -> bool:
+        if not self.resend_api_key:
+            raise RuntimeError("RESEND_API_KEY is not configured.")
+        resp = requests.post(
+            f"{self.resend_api_base}/emails",
+            headers={
+                "Authorization": f"Bearer {self.resend_api_key}",
+                "Content-Type":  "application/json",
+                "Idempotency-Key": str(uuid.uuid4()),
+            },
+            json=payload,
+            timeout=30,
+        )
+        if resp.status_code >= 400:
+            try:
+                detail = resp.json()
+            except ValueError:
+                detail = resp.text
+            raise RuntimeError(f"Resend API error ({resp.status_code}): {detail}")
+        logger.info(f"Email sent via Resend to {payload['to']}")
+        return True
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Provider resolution
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _resolve_provider(self) -> str:
+        gmail_ready  = self._gmail_ready()
+        smtp_ready   = self._smtp_ready()
+        resend_ready = self._resend_ready()
+
+        pref = self.provider_preference
+
+        # Explicit preference
+        if pref == "gmail":
+            return "gmail" if gmail_ready else "disabled"
+        if pref == "smtp":
+            return "smtp" if smtp_ready else "disabled"
+        if pref == "resend":
+            return "resend" if resend_ready else "disabled"
+
+        # Auto mode — Gmail first (works everywhere), then SMTP (local only), then Resend
+        if gmail_ready:
+            return "gmail"
+        if smtp_ready and not self._on_render:
+            return "smtp"
+        if resend_ready:
+            return "resend"
+        # Last resort: try smtp anyway and let it fail with a clear message
+        if smtp_ready:
+            return "smtp"
+        return "disabled"
+
+    def _gmail_ready(self) -> bool:
+        return bool(self.gmail_client_id
+                    and self.gmail_client_secret
+                    and self.gmail_refresh_token
+                    and self.sender)
+
+    def _smtp_ready(self) -> bool:
+        return bool(self.user and self.password)
+
+    def _resend_ready(self) -> bool:
+        return bool(self.resend_api_key and self.sender)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Helpers
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _read_attachment(self, pdf_path: str):
+        p = Path(pdf_path)
+        if not p.exists():
+            logger.warning(f"PDF not found at {pdf_path}; sending without attachment.")
+            return None, None
+        return p, p.read_bytes()
+
+    def _subject(self, label: str, date_str: str) -> str:
+        return f"[Scheduled Report] {label} - {date_str}"
+
+    def _report_date(self) -> str:
+        return datetime.utcnow().strftime("%B %d, %Y")
+
+    def _html_email_body(self, report_label: str, date_str: str, schedule_id) -> str:
+        return f"""<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
@@ -186,7 +392,6 @@ class EmailClient:
     .info-row span {{ font-weight: 600; color: #1a1a2e; }}
     .footer {{ background: #f4f6fb; padding: 16px 32px; font-size: 11px;
                color: #999aaa; border-top: 1px solid #e8eaf0; }}
-    a {{ color: #e94560; }}
   </style>
 </head>
 <body>
@@ -197,35 +402,28 @@ class EmailClient:
   </div>
   <div class="body">
     <div class="badge">SCHEDULED REPORT</div>
-    <p>
-      Your scheduled report is ready. Please find the <strong>{report_label}</strong>
-      attached to this email as a PDF document.
-    </p>
+    <p>Your scheduled report is ready. Please find the <strong>{report_label}</strong>
+       attached to this email as a PDF document.</p>
     <div class="info-row">
       Report Date: <span>{date_str}</span> &nbsp;|&nbsp;
-      Schedule ID: <span>#{schedule_id or "N/A"}</span> &nbsp;|&nbsp;
+      Schedule ID: <span>#{schedule_id or 'N/A'}</span> &nbsp;|&nbsp;
       Type: <span>{report_label}</span>
     </div>
-    <p>
-      This report was automatically generated and dispatched by the
-      <strong>Email Report Scheduler</strong>. It contains the latest data
-      from your analytics dashboard and insights module.
-    </p>
+    <p>This report was automatically generated and dispatched by the
+       <strong>Zero Click AI</strong> Email Report Scheduler.</p>
     <p style="font-size:12px; color:#999aaa;">
-      To modify delivery frequency or recipients, log in to the admin panel
-      and navigate to <em>Email Scheduler</em>.
+      To modify delivery frequency or recipients, log in and navigate to
+      <em>Email Scheduler</em>.
     </p>
   </div>
   <div class="footer">
-    This is an automated message. Please do not reply directly to this email.
-    - Confidential - Internal Use Only
+    This is an automated message. Please do not reply. — Confidential — Internal Use Only
   </div>
 </div>
 </body>
-</html>
-"""
+</html>"""
 
-    def _plain_text_email_body(self, report_label: str, date_str: str, schedule_id: int) -> str:
+    def _plain_text_email_body(self, report_label: str, date_str: str, schedule_id) -> str:
         return (
             f"{report_label}\n"
             f"Automated Report Delivery - {date_str}\n\n"
@@ -234,175 +432,3 @@ class EmailClient:
             f"Type: {report_label}\n\n"
             "This is an automated message from Zero Click AI."
         )
-
-    def _connect_smtp(self) -> smtplib.SMTP:
-        """Open an authenticated SMTP connection."""
-        server = smtplib.SMTP(self.host, self.port, timeout=30)
-        server.ehlo()
-        if self.use_tls:
-            server.starttls()
-            server.ehlo()
-        if self.user and self.password:
-            server.login(self.user, self.password)
-        return server
-
-    def _send_smtp(self, msg: MIMEMultipart, recipients: list) -> bool:
-        """Transmit via SMTP, with automatic Resend fallback on network errors."""
-        try:
-            with self._connect_smtp() as server:
-                failed = server.sendmail(self._smtp_sender_email(), recipients, msg.as_string())
-            if failed:
-                logger.warning(f"Some recipients failed: {failed}")
-            else:
-                logger.info(f"Email successfully sent to {recipients}")
-            return True
-        except smtplib.SMTPAuthenticationError:
-            logger.error("SMTP authentication failed. Check SMTP_USER / SMTP_PASSWORD.")
-            raise
-        except smtplib.SMTPConnectError as exc:
-            logger.error(f"Could not connect to SMTP server {self.host}:{self.port}")
-            if self._resend_ready():
-                logger.info("Falling back to Resend due to SMTP connection failure.")
-                payload = self._compose_resend_payload_from_mime(msg, recipients)
-                return self._send_resend(payload)
-            raise
-        except OSError as exc:
-            # Catches "Network is unreachable" on Render free tier
-            if "unreachable" in str(exc).lower() or "errno 101" in str(exc).lower():
-                logger.warning(f"SMTP blocked (network unreachable): {exc}")
-                if self._resend_ready():
-                    logger.info("Auto-falling back to Resend API.")
-                    payload = self._compose_resend_payload_from_mime(msg, recipients)
-                    return self._send_resend(payload)
-                raise RuntimeError(
-                    "SMTP is blocked on this platform and RESEND_API_KEY is not set. "
-                    "Add RESEND_API_KEY + SENDER_EMAIL to your environment variables."
-                ) from exc
-            raise
-        except Exception as exc:
-            logger.exception(f"Email send failed: {exc}")
-            raise
-
-    def _send_resend(self, payload: dict, schedule_id: int = None) -> bool:
-        """Transmit via the Resend HTTP API."""
-        if not self.resend_api_key:
-            raise RuntimeError("RESEND_API_KEY is not configured.")
-        if not self.sender:
-            raise RuntimeError("SENDER_EMAIL is required when using Resend.")
-
-        try:
-            response = requests.post(
-                f"{self.resend_api_base}/emails",
-                headers={
-                    "Authorization": f"Bearer {self.resend_api_key}",
-                    "Content-Type": "application/json",
-                    "Idempotency-Key": f"schedule-{schedule_id or 'manual'}-{uuid.uuid4()}",
-                },
-                json=payload,
-                timeout=30,
-            )
-            if response.status_code >= 400:
-                try:
-                    detail = response.json()
-                except ValueError:
-                    detail = response.text
-                raise RuntimeError(f"Resend API error ({response.status_code}): {detail}")
-
-            email_id = response.json().get("id")
-            logger.info(f"Email successfully sent via Resend to {payload['to']} (id={email_id})")
-            return True
-        except requests.RequestException as exc:
-            logger.exception(f"Resend API request failed: {exc}")
-            raise
-
-    def _compose_resend_payload_from_mime(self, msg: MIMEMultipart, recipients: list) -> dict:
-        """Build a minimal Resend API payload from an already-composed MIME message."""
-        payload = {
-            "from": f"{self.sender_name} <{self.sender}>",
-            "to": recipients,
-            "subject": msg.get("Subject", "Scheduled Report"),
-            "html": "",
-        }
-        attachments = []
-        for part in msg.walk():
-            ct = part.get_content_type()
-            if ct == "text/html":
-                payload["html"] = part.get_payload(decode=True).decode("utf-8", errors="replace")
-            elif ct == "application/pdf":
-                raw = part.get_payload(decode=True)
-                if raw:
-                    attachments.append({
-                        "filename": part.get_filename() or "report.pdf",
-                        "content": base64.b64encode(raw).decode("ascii"),
-                    })
-        if attachments:
-            payload["attachments"] = attachments
-        return payload
-
-    def _resolve_provider(self) -> str:
-        resend_ready = self._resend_ready()
-        smtp_ready   = self._smtp_ready()
-
-        # On Render (and similar cloud platforms), SMTP is blocked at the network
-        # level. Automatically prefer Resend when running there.
-        if self._smtp_blocked:
-            if resend_ready:
-                logger.info("Running on Render — using Resend (SMTP is blocked).")
-                return "resend"
-            logger.warning(
-                "Running on Render but RESEND_API_KEY is not set. "
-                "Email will not work. Set RESEND_API_KEY + SENDER_EMAIL."
-            )
-            return "disabled"
-
-        pref = self.provider_preference
-        if pref == "resend":
-            return "resend" if resend_ready else ("smtp" if smtp_ready else "disabled")
-        if pref == "smtp":
-            return "smtp" if smtp_ready else "disabled"
-        # auto
-        if resend_ready:
-            return "resend"
-        if smtp_ready:
-            return "smtp"
-        return "disabled"
-
-    def _resend_ready(self) -> bool:
-        return bool(self.resend_api_key and self.sender)
-
-    def _smtp_ready(self) -> bool:
-        return bool(self.user and self.password)
-
-    def _should_fallback_to_smtp(self, exc: RuntimeError) -> bool:
-        if not self._smtp_ready():
-            return False
-        message = str(exc).lower()
-        recoverable_markers = [
-            "domain is not verified",
-            "validation_error",
-            "resend api error (403)",
-        ]
-        return any(marker in message for marker in recoverable_markers)
-
-    def _read_attachment(self, pdf_path: str):
-        pdf_file = Path(pdf_path)
-        if not pdf_file.exists():
-            logger.warning(f"PDF not found at {pdf_path}; sending without attachment.")
-            return None, None
-        with open(pdf_path, "rb") as f:
-            return pdf_file, f.read()
-
-    def _sender_header(self, provider: str) -> str:
-        sender_email = self._smtp_sender_email() if provider == "smtp" else self.sender
-        if not sender_email:
-            raise RuntimeError("SENDER_EMAIL is not configured.")
-        return f"{self.sender_name} <{sender_email}>"
-
-    def _smtp_sender_email(self) -> str:
-        return self.user or self.sender
-
-    def _subject(self, report_label: str, date_str: str) -> str:
-        return f"[Scheduled Report] {report_label} - {date_str}"
-
-    def _report_date(self) -> str:
-        return datetime.utcnow().strftime("%B %d, %Y")
