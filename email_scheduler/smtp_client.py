@@ -35,7 +35,7 @@ class EmailClient:
     """
 
     def __init__(self):
-        self.provider_preference = os.getenv("EMAIL_PROVIDER", "smtp").strip().lower()
+        self.provider_preference = os.getenv("EMAIL_PROVIDER", "auto").strip().lower()
         self.resend_api_key = os.getenv("RESEND_API_KEY", "").strip()
         self.resend_api_base = os.getenv("RESEND_API_BASE", "https://api.resend.com").rstrip("/")
 
@@ -46,6 +46,10 @@ class EmailClient:
         self.use_tls = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
         self.sender = os.getenv("SENDER_EMAIL", self.user).strip()
         self.sender_name = os.getenv("SENDER_NAME", "Report Scheduler System")
+
+        # Auto-detect cloud environments that block outbound SMTP.
+        # RENDER=true is injected automatically by Render into all services.
+        self._smtp_blocked = os.getenv("RENDER", "").lower() in ("true", "1", "yes")
 
     def send_report(self, recipients: list, report_type: str,
                     pdf_path: str, schedule_id: int = None) -> bool:
@@ -243,7 +247,7 @@ class EmailClient:
         return server
 
     def _send_smtp(self, msg: MIMEMultipart, recipients: list) -> bool:
-        """Transmit via SMTP."""
+        """Transmit via SMTP, with automatic Resend fallback on network errors."""
         try:
             with self._connect_smtp() as server:
                 failed = server.sendmail(self._smtp_sender_email(), recipients, msg.as_string())
@@ -255,8 +259,25 @@ class EmailClient:
         except smtplib.SMTPAuthenticationError:
             logger.error("SMTP authentication failed. Check SMTP_USER / SMTP_PASSWORD.")
             raise
-        except smtplib.SMTPConnectError:
+        except smtplib.SMTPConnectError as exc:
             logger.error(f"Could not connect to SMTP server {self.host}:{self.port}")
+            if self._resend_ready():
+                logger.info("Falling back to Resend due to SMTP connection failure.")
+                payload = self._compose_resend_payload_from_mime(msg, recipients)
+                return self._send_resend(payload)
+            raise
+        except OSError as exc:
+            # Catches "Network is unreachable" on Render free tier
+            if "unreachable" in str(exc).lower() or "errno 101" in str(exc).lower():
+                logger.warning(f"SMTP blocked (network unreachable): {exc}")
+                if self._resend_ready():
+                    logger.info("Auto-falling back to Resend API.")
+                    payload = self._compose_resend_payload_from_mime(msg, recipients)
+                    return self._send_resend(payload)
+                raise RuntimeError(
+                    "SMTP is blocked on this platform and RESEND_API_KEY is not set. "
+                    "Add RESEND_API_KEY + SENDER_EMAIL to your environment variables."
+                ) from exc
             raise
         except Exception as exc:
             logger.exception(f"Email send failed: {exc}")
@@ -294,16 +315,52 @@ class EmailClient:
             logger.exception(f"Resend API request failed: {exc}")
             raise
 
+    def _compose_resend_payload_from_mime(self, msg: MIMEMultipart, recipients: list) -> dict:
+        """Build a minimal Resend API payload from an already-composed MIME message."""
+        payload = {
+            "from": f"{self.sender_name} <{self.sender}>",
+            "to": recipients,
+            "subject": msg.get("Subject", "Scheduled Report"),
+            "html": "",
+        }
+        attachments = []
+        for part in msg.walk():
+            ct = part.get_content_type()
+            if ct == "text/html":
+                payload["html"] = part.get_payload(decode=True).decode("utf-8", errors="replace")
+            elif ct == "application/pdf":
+                raw = part.get_payload(decode=True)
+                if raw:
+                    attachments.append({
+                        "filename": part.get_filename() or "report.pdf",
+                        "content": base64.b64encode(raw).decode("ascii"),
+                    })
+        if attachments:
+            payload["attachments"] = attachments
+        return payload
+
     def _resolve_provider(self) -> str:
         resend_ready = self._resend_ready()
-        smtp_ready = self._smtp_ready()
+        smtp_ready   = self._smtp_ready()
 
-        if self.provider_preference == "resend":
+        # On Render (and similar cloud platforms), SMTP is blocked at the network
+        # level. Automatically prefer Resend when running there.
+        if self._smtp_blocked:
             if resend_ready:
+                logger.info("Running on Render — using Resend (SMTP is blocked).")
                 return "resend"
+            logger.warning(
+                "Running on Render but RESEND_API_KEY is not set. "
+                "Email will not work. Set RESEND_API_KEY + SENDER_EMAIL."
+            )
+            return "disabled"
+
+        pref = self.provider_preference
+        if pref == "resend":
+            return "resend" if resend_ready else ("smtp" if smtp_ready else "disabled")
+        if pref == "smtp":
             return "smtp" if smtp_ready else "disabled"
-        if self.provider_preference == "smtp":
-            return "smtp" if smtp_ready else "disabled"
+        # auto
         if resend_ready:
             return "resend"
         if smtp_ready:
