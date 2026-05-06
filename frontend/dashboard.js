@@ -25,7 +25,8 @@
       chatOpen: false, voiceActive: false,
       liveTimer: null, liveSource: null,
       voiceWarningShown: false,
-      loaderCount: 0
+      loaderCount: 0,
+      userRole: "Viewer"
     };
   
     /* ═══════════════════════════════════════════════════════════════════════
@@ -56,6 +57,7 @@
       const role    = (user && user.role)   || localStorage.getItem("userRole")  || "Admin";
       const name    = (user && user.name)   || email.split("@")[0].replace(/[._-]+/g," ").replace(/\b\w/g, c => c.toUpperCase());
       const initials= name.split(" ").map(x => x[0]).join("").slice(0,2).toUpperCase();
+      state.userRole = role;
   
       safe("navRoleBadge",        el => el.textContent = role);
       safe("sbUserName",          el => el.textContent = name);
@@ -63,6 +65,11 @@
       safe("sbAvatar",            el => el.textContent = initials);
       safe("sbAvatarCollapsed",   el => el.textContent = initials);
       if (role === "Admin") { safe("usersNavLink", el => el.style.display = "flex"); }
+      safe("uploadCard",          el => el.style.display = canUpload(role) ? "" : "none");
+    }
+
+    function canUpload(role) {
+      return ["Admin", "Sales Manager", "Analyst"].includes(role || state.userRole || "Viewer");
     }
   
     /* ═══════════════════════════════════════════════════════════════════════
@@ -747,6 +754,11 @@
           hideLoader();
           return;
         } catch (err) {
+          if (err && (err.status === 401 || err.status === 403)) {
+            hideLoader();
+            if (App) App.showToast(err.message || "Your role cannot upload datasets.", "error");
+            return;
+          }
           if (App) App.showToast("Backend upload failed. Parsing locally.", "warn");
         }
       }

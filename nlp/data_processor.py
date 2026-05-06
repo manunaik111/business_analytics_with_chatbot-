@@ -144,8 +144,19 @@ def execute_query(df: pd.DataFrame, parsed_query: dict) -> dict:
 
     if operation and operation != "count":
         if not pd.api.types.is_numeric_dtype(filtered_df[target_col]):
+            # Target is categorical — try groupby with a numeric column instead
+            num_cols = filtered_df.select_dtypes(include="number").columns.tolist()
+            if num_cols and operation in {"sum", "average", "max", "min"}:
+                num_col = num_cols[0]
+                ops_map = {"sum": "sum", "average": "mean", "max": "idxmax", "min": "idxmin"}
+                grouped = filtered_df.groupby(target_col)[num_col].sum().sort_values(ascending=(operation=="min"))
+                if not grouped.empty:
+                    result["data"] = grouped.index[0]
+                    result["message"] = f"{grouped.index[0]} has the {'highest' if operation in ('max','sum') else 'lowest'} {num_col}."
+                    result["kind"] = "aggregation"
+                    return result
             result["status"] = "error"
-            result["message"] = f"The column '{target_col}' is not numeric, so I cannot calculate {operation}."
+            result["message"] = f"'{target_col}' is a text column. Try asking: 'which {target_col} has the highest [metric]?'"
             result["data"] = None
             return result
 

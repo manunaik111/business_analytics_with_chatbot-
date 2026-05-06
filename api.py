@@ -20,7 +20,7 @@ Files used:
   email_scheduler/db_manager.py   → DatabaseManager
 """
 
-import os, io, json, asyncio, uuid, sys
+import os, io, json, asyncio, uuid, sys, sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Optional
@@ -53,7 +53,8 @@ except Exception:
 
 try:
     from data_management.upload_store import (
-        save_user_upload, load_user_upload, load_user_meta, clear_user_upload
+        save_user_upload, load_user_upload, load_user_meta, clear_user_upload,
+        save_active_upload, load_active_upload, load_active_meta, clear_active_upload
     )
     HAS_UPLOAD_STORE = True
 except Exception:
@@ -170,7 +171,9 @@ except Exception:
 SECRET_KEY   = os.getenv("JWT_SECRET", "genesis-secret-key-change-in-prod")
 ALGORITHM    = "HS256"
 TOKEN_EXPIRY = 24
-USERS_FILE   = "users.json"
+USER_DB_PATH = os.getenv("USER_DB_PATH") or os.getenv("DATABASE_URL", os.path.join("database", "users.db"))
+USER_DB_TABLE = "app_users"
+LEGACY_USERS_FILE = "users.json"
 DATA_FILE    = os.path.join("data", "SALES_DATA_SETT.csv")
 ALLOWED_ORIGINS = [
     origin.strip()
@@ -182,6 +185,7 @@ ALLOWED_ORIGINS = [
 ]
 
 os.makedirs("generated_reports", exist_ok=True)
+os.makedirs(os.path.dirname(USER_DB_PATH) or ".", exist_ok=True)
 
 pwd_ctx  = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer(auto_error=False)
@@ -240,18 +244,38 @@ def _json_safe(value):
 
 
 def _email_env_status() -> dict:
+    provider_preference = os.getenv("EMAIL_PROVIDER", "smtp").strip().lower()
+    resend_key = os.getenv("RESEND_API_KEY", "").strip()
+    sender_email = os.getenv("SENDER_EMAIL", "").strip()
     smtp_user = os.getenv("SMTP_USER", "").strip()
     smtp_password = (os.getenv("SMTP_PASSWORD") or os.getenv("SMTP_PASS", "")).strip()
+
+    has_resend = bool(resend_key and sender_email)
     has_smtp = bool(smtp_user and smtp_password)
+    if provider_preference == "resend":
+        active_provider = "resend" if has_resend else "disabled"
+    elif provider_preference == "smtp":
+        active_provider = "smtp" if has_smtp else "disabled"
+    else:
+        active_provider = "resend" if has_resend else ("smtp" if has_smtp else "disabled")
+
+    enabled = HAS_SCHEDULER and active_provider != "disabled"
+    if enabled:
+        message = f"Email scheduler is available via {active_provider.capitalize()}."
+    else:
+        message = (
+            "Email is optional and currently disabled. Set EMAIL_PROVIDER=resend with "
+            "RESEND_API_KEY and SENDER_EMAIL, or configure SMTP_USER and SMTP_PASSWORD."
+        )
+
     return {
-        "enabled": HAS_SCHEDULER and has_smtp,
+        "enabled": enabled,
         "has_scheduler_module": HAS_SCHEDULER,
+        "provider_preference": provider_preference,
+        "provider": active_provider,
+        "has_resend_credentials": has_resend,
         "has_smtp_credentials": has_smtp,
-        "message": (
-            "Email scheduler is available."
-            if HAS_SCHEDULER and has_smtp
-            else "Email is optional and currently disabled. Set SMTP_USER and SMTP_PASSWORD (or SMTP_PASS) to enable it."
-        ),
+        "message": message,
     }
 
 
@@ -259,34 +283,154 @@ def _require_email_enabled() -> None:
     status = _email_env_status()
     if not status["has_scheduler_module"]:
         raise HTTPException(503, "Email scheduler module not available. Ensure email_scheduler/ folder is in project root.")
-    if not status["has_smtp_credentials"]:
+    if not status["enabled"]:
         raise HTTPException(503, status["message"])
 
 # ═════════════════════════════════════════════════════════════════════════════
 # USER STORAGE
 # ═════════════════════════════════════════════════════════════════════════════
-def _load_users() -> dict:
-    if os.path.exists(USERS_FILE):
-        try:
-            with open(USERS_FILE) as f:
-                return json.load(f)
-        except Exception:
-            pass
-    default = {
-        "admin@sales.com": {
-            "name": "Sales Admin",
-            "password": pwd_ctx.hash("Admin@1234"),
-            "role": "Admin",
-            "created_at": datetime.utcnow().isoformat(),
-            "active": True
-        }
-    }
-    _save_users(default)
-    return default
+def _user_db_conn():
+    conn = sqlite3.connect(USER_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-def _save_users(u: dict):
-    with open(USERS_FILE, "w") as f:
-        json.dump(u, f, indent=2)
+
+def _seed_default_users(conn) -> None:
+    conn.execute(
+        f"""
+        INSERT OR IGNORE INTO {USER_DB_TABLE} (email, name, password_hash, role, created_at, is_active)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "admin@sales.com",
+            "Sales Admin",
+            pwd_ctx.hash("Admin@1234"),
+            "Admin",
+            datetime.utcnow().isoformat(),
+            1,
+        ),
+    )
+
+
+def _migrate_legacy_users(conn) -> None:
+    if not os.path.exists(LEGACY_USERS_FILE):
+        return
+
+    count = conn.execute(f"SELECT COUNT(*) FROM {USER_DB_TABLE}").fetchone()[0]
+    if count > 0:
+        return
+
+    try:
+        with open(LEGACY_USERS_FILE) as f:
+            legacy_users = json.load(f)
+    except Exception:
+        legacy_users = {}
+
+    for email, user in legacy_users.items():
+        conn.execute(
+            f"""
+            INSERT OR REPLACE INTO {USER_DB_TABLE} (email, name, password_hash, role, created_at, is_active)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                email.lower().strip(),
+                user.get("name", ""),
+                user.get("password", ""),
+                user.get("role", "Viewer"),
+                user.get("created_at", datetime.utcnow().isoformat()),
+                1 if user.get("active", True) else 0,
+            ),
+        )
+
+
+def _init_user_store() -> None:
+    conn = _user_db_conn()
+    try:
+        conn.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS {USER_DB_TABLE} (
+                email TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1
+            )
+            """
+        )
+        _migrate_legacy_users(conn)
+        _seed_default_users(conn)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _load_users() -> dict:
+    _init_user_store()
+    conn = _user_db_conn()
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT email, name, password_hash, role, created_at, is_active
+            FROM {USER_DB_TABLE}
+            ORDER BY email
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return {
+        row["email"]: {
+            "name": row["name"],
+            "password": row["password_hash"],
+            "role": row["role"],
+            "created_at": row["created_at"],
+            "active": bool(row["is_active"]),
+        }
+        for row in rows
+    }
+
+
+def _save_users(users: dict) -> None:
+    _init_user_store()
+    conn = _user_db_conn()
+    try:
+        existing = {
+            row["email"]
+            for row in conn.execute(f"SELECT email FROM {USER_DB_TABLE}").fetchall()
+        }
+        incoming = {email.lower().strip() for email in users.keys()}
+
+        for email, user in users.items():
+            normalized_email = email.lower().strip()
+            conn.execute(
+                f"""
+                INSERT INTO {USER_DB_TABLE} (email, name, password_hash, role, created_at, is_active)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(email) DO UPDATE SET
+                    name = excluded.name,
+                    password_hash = excluded.password_hash,
+                    role = excluded.role,
+                    created_at = excluded.created_at,
+                    is_active = excluded.is_active
+                """,
+                (
+                    normalized_email,
+                    user.get("name", ""),
+                    user.get("password", ""),
+                    user.get("role", "Viewer"),
+                    user.get("created_at", datetime.utcnow().isoformat()),
+                    1 if user.get("active", True) else 0,
+                ),
+            )
+
+        removed = existing - incoming
+        if removed:
+            conn.executemany(f"DELETE FROM {USER_DB_TABLE} WHERE email = ?", [(email,) for email in removed])
+
+        conn.commit()
+    finally:
+        conn.close()
 
 # ═════════════════════════════════════════════════════════════════════════════
 # JWT
@@ -356,6 +500,11 @@ def _user_id(user: Optional[dict]) -> str:
 
 def _get_upload_meta(user: Optional[dict]) -> dict:
     if not user:
+        if HAS_UPLOAD_STORE:
+            try:
+                return load_active_meta()
+            except Exception:
+                return {}
         return {}
     uid = _user_id(user)
     if uid in _upload_meta_cache:
@@ -365,6 +514,12 @@ def _get_upload_meta(user: Optional[dict]) -> dict:
         if meta:
             _upload_meta_cache[uid] = meta
             return meta.copy()
+        try:
+            meta = load_active_meta()
+            if meta:
+                return meta.copy()
+        except Exception:
+            pass
     return {}
 
 
@@ -374,6 +529,7 @@ def _set_user_upload(user: dict, df: pd.DataFrame, meta: dict) -> None:
     _upload_meta_cache[uid] = meta.copy()
     if HAS_UPLOAD_STORE:
         save_user_upload(uid, df, meta)
+        save_active_upload(df, meta)
 
 
 def _clear_user_upload(user: dict) -> None:
@@ -382,10 +538,11 @@ def _clear_user_upload(user: dict) -> None:
     _upload_meta_cache.pop(uid, None)
     if HAS_UPLOAD_STORE:
         clear_user_upload(uid)
+        clear_active_upload()
 
 
 def _get_df(user: Optional[dict] = None) -> Optional[pd.DataFrame]:
-    """Return current user's uploaded df if available, else default CSV."""
+    """Return current user's uploaded df, else shared active df, else default CSV."""
     if user:
         uid = _user_id(user)
         if uid in _uploaded_df_cache:
@@ -399,6 +556,13 @@ def _get_df(user: Optional[dict] = None) -> Optional[pd.DataFrame]:
                     return stored.copy()
             except Exception:
                 pass
+    if HAS_UPLOAD_STORE:
+        try:
+            shared = load_active_upload()
+            if shared is not None:
+                return shared.copy()
+        except Exception:
+            pass
     if os.path.exists(DATA_FILE):
         try:
             df = pd.read_csv(DATA_FILE, encoding="utf-8-sig")
@@ -525,6 +689,429 @@ def _find_item_column(df: pd.DataFrame) -> Optional[str]:
             return col
     categorical = df.select_dtypes(include=["object", "category"]).columns.tolist()
     return categorical[0] if categorical else None
+
+
+def _apply_request_filters(df: Optional[pd.DataFrame], filters: Optional[dict]) -> Optional[pd.DataFrame]:
+    if df is None:
+        return None
+    filters = filters or {}
+    return _apply_filters(
+        df,
+        str(filters.get("category", "All")),
+        str(filters.get("region", "All")),
+        str(filters.get("year", "All")),
+        str(filters.get("profit", "All")),
+    )
+
+
+def _format_chat_metric(value, money: bool = False, digits: int = 2) -> str:
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+
+    if money:
+        if abs(num) >= 100 or num == int(num):
+            return f"${num:,.0f}"
+        return f"${num:,.{digits}f}"
+    if abs(num) >= 100 or num == int(num):
+        return f"{num:,.0f}"
+    return f"{num:,.{digits}f}"
+
+
+def _detect_metric_column_from_question(question: str, df: pd.DataFrame) -> Optional[str]:
+    lower = question.lower()
+    aliases = [
+        ("sales", "Sales"),
+        ("revenue", "Revenue"),
+        ("revenue", "Sales"),
+        ("profit", "Profit"),
+        ("quantity", "Quantity"),
+        ("discount", "Discount"),
+        ("order", "Order ID"),
+        ("customer", "Customer ID"),
+    ]
+    for term, column in aliases:
+        if term in lower and column in df.columns:
+            return column
+
+    if HAS_NLP:
+        try:
+            parsed = process_query(question, df=df, dataset_meta={})
+            metric = parsed.get("metric")
+            if metric in df.columns:
+                return metric
+        except Exception:
+            pass
+
+    return _find_numeric_target_column(df)
+
+
+def _try_structured_chat_response(question: str, df: Optional[pd.DataFrame], meta: dict, history: list = None) -> Optional[str]:
+    import re as _re
+    lower = question.strip().lower()
+    if not lower:
+        return "Ask me about your dataset, KPIs, or the current filters."
+
+    # Fix #12: Follow-up question detection
+    # Detect short follow-ups like "what about West?", "and for 2023?", "how about Technology?"
+    history = history or []
+    _followup_triggers = ("what about", "how about", "and for", "and the", "what of",
+                          "now for", "same for", "also for", "for the")
+    is_followup = any(lower.startswith(t) for t in _followup_triggers) or (
+        len(lower.split()) <= 4 and not any(lower.startswith(g) for g in
+            ["hi", "hello", "hey", "help", "who", "what", "show", "list", "top",
+             "total", "how many", "compare", "trend"])
+    )
+    if is_followup and history and df is not None and not df.empty:
+        import re as _re_fu
+        # Extract the filter value from the question (last 1-2 words)
+        filter_val = _re_fu.sub(
+            r"^(what about|how about|and for|and the|what of|now for|same for|also for|for the)\s*",
+            "", lower
+        ).strip().rstrip("?")
+        if filter_val:
+            # Look up all categorical columns and see if filter_val matches a value
+            cat_cols = [_find_category_column(df), _find_region_column(df)]
+            for gc in cat_cols:
+                if not gc:
+                    continue
+                unique_vals = df[gc].dropna().astype(str).str.lower().unique()
+                matched = next((v for v in unique_vals if filter_val in v or v in filter_val), None)
+                if matched:
+                    mask = df[gc].astype(str).str.lower() == matched
+                    sub_df = df[mask]
+                    if sub_df.empty:
+                        continue
+                    display = df[gc][mask].iloc[0]
+                    # Infer what the last answer was about from history
+                    last_bot = next(
+                        (h["content"] for h in reversed(history) if h["role"] == "assistant"), ""
+                    )
+                    target_col = _find_numeric_target_column(sub_df)
+                    if "profit" in last_bot.lower() and "Profit" in sub_df.columns:
+                        target_col = "Profit"
+                    elif "sales" in last_bot.lower() and "Sales" in sub_df.columns:
+                        target_col = "Sales"
+                    elif "revenue" in last_bot.lower() and "Sales" in sub_df.columns:
+                        target_col = "Sales"
+                    if target_col and target_col in sub_df.columns:
+                        total = sub_df[target_col].sum()
+                        money = target_col in {"Sales", "Revenue", "Profit"}
+                        avg = sub_df[target_col].mean()
+                        return (
+                            f"For {display}: {target_col} total is "
+                            f"{_format_chat_metric(total, money=money)}, "
+                            f"avg {_format_chat_metric(avg, money=money)} "
+                            f"across {len(sub_df):,} records."
+                        )
+
+    # Greetings
+    _greet = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "how are you"]
+    if any(lower == g or lower.startswith(g + " ") or lower.startswith(g + "!") or lower.startswith(g + ",") for g in _greet):
+        return "Hi! I can help with KPIs, trends, top performers, comparisons, data quality, and more. What would you like to know?"
+
+    # Thanks / Bye  (#18 fix)
+    if any(lower == g or lower.startswith(g) for g in ["thanks", "thank you", "cheers", "bye", "goodbye", "see you"]):
+        return "You're welcome! Let me know if you have any other questions about the data."
+
+    # Identity / help  (#1 fix — zero token)
+    _identity = [
+        "who are you", "what are you", "what can you do", "what do you do",
+        "tell me about yourself", "tell me about you", "what is this",
+        "what is zero click", "what is caesar", "what is this chatbot",
+        "help me", "help", "how can you help", "how do you work",
+        "what kind of questions", "what questions can i ask",
+        "what should i ask", "what can i ask",
+        "are you an ai", "are you a bot", "are you human",
+        "introduce yourself", "your name", "who made you",
+    ]
+    if any(p in lower for p in _identity):
+        return (
+            "I'm your AI Dataset Assistant. Here's what you can ask:\n"
+            "\u2022 KPIs: 'total sales', 'profit margin', 'total orders'\n"
+            "\u2022 Top/Bottom: 'top 5 products by sales', 'worst region by profit'\n"
+            "\u2022 Comparisons: 'compare sales by category', 'breakdown by region'\n"
+            "\u2022 Trends: 'monthly sales trend', 'yearly revenue breakdown'\n"
+            "\u2022 Data quality: 'any missing values?', 'show duplicates'\n"
+            "\u2022 Stats: 'average discount', 'min profit', 'unique customers'"
+        )
+
+    if df is None or df.empty:
+        return "No data is loaded for the current filters yet."
+
+    # Setup
+    metric_col = _detect_metric_column_from_question(question, df)
+    money_metric = metric_col in {"Sales", "Revenue", "Profit"}
+    kpis = _build_kpis_dict(df)
+    numeric_target = _find_numeric_target_column(df)
+
+    def _money(col): return col in {"Sales", "Revenue", "Profit"}
+
+    def _groupby_answer(group_col, target_col, ascending=False, top_n=None, label=""):
+        """Generic groupby helper — avoids repeating the same pattern."""
+        if not group_col or not target_col:
+            return None
+        if not pd.api.types.is_numeric_dtype(df[target_col]):
+            return None
+        grouped = df.groupby(group_col)[target_col].sum().sort_values(ascending=ascending)
+        if grouped.empty:
+            return None
+        if top_n:
+            grouped = grouped.head(top_n)
+            money = _money(target_col)
+            lines = [f"{i+1}. {lbl} ({_format_chat_metric(v, money=money)})" for i,(lbl,v) in enumerate(grouped.items())]
+            return (label or f"Top {top_n} by {target_col.lower()}") + ":\n" + "\n".join(lines)
+        money = _money(target_col)
+        direction = "lowest" if ascending else "top"
+        return f"{grouped.index[0]} has the {direction} {target_col.lower()} at {_format_chat_metric(grouped.iloc[0], money=money)}."
+
+    # Row count
+    if any(t in lower for t in ("row count", "record count", "how many rows", "how many records",
+                                "number of rows", "number of records", "total records")):
+        return f"There are {len(df):,} records in the current filtered dataset."
+
+    # Columns / schema
+    if any(t in lower for t in ("column", "schema", "field", "what data", "what information")):
+        cols = df.columns.tolist()
+        preview = ", ".join(cols[:10])
+        suffix = f" ... and {len(cols)-10} more" if len(cols) > 10 else ""
+        return f"This dataset has {len(cols)} columns: {preview}{suffix}."
+
+    # Dataset name
+    if "dataset" in lower and any(t in lower for t in ("what", "which", "current", "loaded", "upload")):
+        dataset_name = meta.get("filename") or meta.get("datasetName") or "the current dataset"
+        return f"You are working with '{dataset_name}', filtered to {len(df):,} rows."
+
+    # Total sales
+    if any(t in lower for t in ("total sales", "sales total", "total revenue", "revenue total")) and _is_sales_compatible(df):
+        return f"Total sales for the current filters: {_format_chat_metric(kpis['total_sales'], money=True)}."
+
+    # Total profit
+    if any(t in lower for t in ("total profit", "profit total", "net profit")) and "Profit" in df.columns:
+        return f"Total profit for the current filters: {_format_chat_metric(kpis['total_profit'], money=True)}."
+
+    # Profit margin
+    if "profit margin" in lower and kpis["total_sales"]:
+        margin = (kpis["total_profit"] / kpis["total_sales"]) * 100
+        return f"Profit margin for the current filters: {margin:,.1f}%."
+
+    # Orders
+    if any(t in lower for t in ("total orders", "number of orders", "how many orders", "order count")):
+        return f"Total orders for the current filters: {kpis['total_orders']:,}."
+
+    # Quantity
+    if any(t in lower for t in ("total quantity", "units sold", "quantity sold", "total units")) and "Quantity" in df.columns:
+        return f"Total quantity sold: {kpis['total_quantity']:,} units."
+
+    # Customers  (#8 fix)
+    if any(t in lower for t in ("unique customers", "how many customers", "number of customers",
+                                "customer count", "total customers")):
+        cust_col = "Customer ID" if "Customer ID" in df.columns else next(
+            (c for c in df.columns if "customer" in c.lower()), None)
+        if cust_col:
+            count = int(df[cust_col].nunique())
+            return f"There are {count:,} unique customers in the current filtered dataset."
+
+    # Shipping / delivery  (#9 fix)
+    if any(t in lower for t in ("shipping", "delivery", "ship time", "shipping delay", "days to ship", "avg ship")):
+        if "shipping_delay_days" in df.columns:
+            avg_ship = float(df["shipping_delay_days"].mean())
+            if not pd.isna(avg_ship):
+                return f"Average shipping delay: {avg_ship:.1f} days for the current filters."
+        elif "Ship Date" in df.columns and "Order Date" in df.columns:
+            delay = (pd.to_datetime(df["Ship Date"], errors="coerce") -
+                     pd.to_datetime(df["Order Date"], errors="coerce")).dt.days.mean()
+            if not pd.isna(delay):
+                return f"Average shipping delay: {delay:.1f} days for the current filters."
+
+    # Discount
+    if any(t in lower for t in ("discount", "avg discount", "average discount")) and "Discount" in df.columns:
+        avg_disc = float(df["Discount"].mean()) * 100
+        return f"Average discount rate: {avg_disc:.1f}% for the current filters."
+
+    # Average / Mean  (#3 fix — works even without pre-detected metric_col)
+    avg_col = metric_col if metric_col and metric_col in df.columns else numeric_target
+    if any(t in lower for t in ("average", "avg", "mean")) and avg_col:
+        if pd.api.types.is_numeric_dtype(df[avg_col]):
+            val = pd.to_numeric(df[avg_col], errors="coerce").mean()
+            if not pd.isna(val):
+                return f"Average {avg_col.lower()}: {_format_chat_metric(val, money=_money(avg_col))}."
+
+    # Min / Lowest single value  (#10 fix)
+    min_col = metric_col if metric_col and metric_col in df.columns else numeric_target
+    if any(t in lower for t in ("minimum", "min value", "lowest value", "smallest")) and min_col:
+        if pd.api.types.is_numeric_dtype(df[min_col]):
+            val = pd.to_numeric(df[min_col], errors="coerce").min()
+            if not pd.isna(val):
+                return f"Minimum {min_col.lower()}: {_format_chat_metric(val, money=_money(min_col))}."
+
+    # Max / Highest single value
+    max_col = metric_col if metric_col and metric_col in df.columns else numeric_target
+    if any(t in lower for t in ("maximum", "max value", "highest value", "largest value")) and max_col:
+        if pd.api.types.is_numeric_dtype(df[max_col]):
+            val = pd.to_numeric(df[max_col], errors="coerce").max()
+            if not pd.isna(val):
+                return f"Maximum {max_col.lower()}: {_format_chat_metric(val, money=_money(max_col))}."
+
+    # Compare / Breakdown  (#5 fix)
+    _cmp = ("compare", "breakdown", "split by", "group by", "by region", "by category",
+            "across regions", "across categories", "per region", "per category",
+            "for each region", "for each category")
+    if any(t in lower for t in _cmp):
+        if any(t in lower for t in ("region", "state", "country", "city", "location")):
+            group_col = _find_region_column(df)
+        elif any(t in lower for t in ("sub-category", "subcategory")):
+            group_col = next((c for c in df.columns if "sub" in c.lower() and "cat" in c.lower()), _find_category_column(df))
+        else:
+            group_col = _find_category_column(df)
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        if group_col and target_col and pd.api.types.is_numeric_dtype(df[target_col]):
+            grouped = df.groupby(group_col)[target_col].sum().sort_values(ascending=False)
+            if not grouped.empty:
+                money = _money(target_col)
+                lines = [f"  {lbl}: {_format_chat_metric(v, money=money)}" for lbl, v in grouped.items()]
+                return f"{target_col} breakdown by {group_col}:\n" + "\n".join(lines)
+
+    # Sub-category breakdown  (#11 fix)
+    if any(t in lower for t in ("sub-category", "subcategory", "sub category")):
+        subcat_col = next((c for c in df.columns if "sub" in c.lower() and "cat" in c.lower()), None)
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        if subcat_col and target_col and pd.api.types.is_numeric_dtype(df[target_col]):
+            grouped = df.groupby(subcat_col)[target_col].sum().sort_values(ascending=False).head(10)
+            if not grouped.empty:
+                money = _money(target_col)
+                lines = [f"{i+1}. {lbl} ({_format_chat_metric(v, money=money)})" for i,(lbl,v) in enumerate(grouped.items())]
+                return f"Top sub-categories by {target_col.lower()}:\n" + "\n".join(lines)
+
+    # Bottom/Worst region  (#4 fix)
+    _region_worst = ("worst region", "lowest region", "bottom region", "least region",
+                     "which region has the lowest", "which region has the least",
+                     "region with the lowest", "region with the least")
+    _region_best = ("top region", "best region", "highest region", "leading region",
+                    "which region", "region with the highest", "region with the most",
+                    "region with the best", "region has the highest", "region has the most")
+    if any(t in lower for t in _region_worst):
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        ans = _groupby_answer(_find_region_column(df), target_col, ascending=True)
+        if ans: return ans
+    elif any(t in lower for t in _region_best):
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        ans = _groupby_answer(_find_region_column(df), target_col, ascending=False)
+        if ans: return ans
+
+    # Bottom/Worst category  (#4 fix)
+    _cat_worst = ("worst category", "lowest category", "bottom category", "least category",
+                  "which category has the lowest", "which category has the least",
+                  "category with the lowest", "category with the least")
+    _cat_best = ("top category", "best category", "highest category", "leading category",
+                 "which category", "category with the highest", "category with the most",
+                 "category with the best", "category has the highest", "category has the most")
+    if any(t in lower for t in _cat_worst):
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        ans = _groupby_answer(_find_category_column(df), target_col, ascending=True)
+        if ans: return ans
+    elif any(t in lower for t in _cat_best):
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        ans = _groupby_answer(_find_category_column(df), target_col, ascending=False)
+        if ans: return ans
+
+    # Top / Bottom N products  (#4, #16 fix — dynamic N)
+    _prod_best = ("top product", "best product", "top 5 product", "top 10 product",
+                  "highest product", "product names", "top product names", "top products",
+                  "what are the top", "show top", "list top")
+    _prod_worst = ("worst product", "bottom product", "lowest product", "least product")
+    n_match = _re.search(r"top\s+(\d+)|bottom\s+(\d+)|worst\s+(\d+)", lower)
+    top_n = int(next(g for g in n_match.groups() if g) if n_match else 5)
+    top_n = min(top_n, 20)
+    if any(t in lower for t in _prod_worst):
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        ans = _groupby_answer(_find_item_column(df), target_col, ascending=True, top_n=top_n,
+                              label=f"Bottom {top_n} by {(target_col or 'items').lower()}")
+        if ans: return ans
+    elif any(t in lower for t in _prod_best):
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        ans = _groupby_answer(_find_item_column(df), target_col, ascending=False, top_n=top_n,
+                              label=f"Top {top_n} by {(target_col or 'items').lower()}")
+        if ans:
+            return ans
+        # Fallback: list items by frequency if no numeric target
+        item_col = _find_item_column(df)
+        if item_col:
+            top_items = df[item_col].dropna().value_counts().head(top_n)
+            lines = [f"{i+1}. {lbl}" for i, lbl in enumerate(top_items.index)]
+            return f"Top {top_n} {item_col} values:\n" + "\n".join(lines)
+
+    # Monthly trend — chronological list  (#7, #14 fix)
+    if any(t in lower for t in ("trend", "monthly", "over time", "by month", "month by month")):
+        date_col = _find_datetime_column(df.copy())
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        if date_col and target_col and pd.api.types.is_numeric_dtype(df[target_col]):
+            td = df[[date_col, target_col]].copy()
+            td[date_col] = pd.to_datetime(td[date_col], errors="coerce")
+            td[target_col] = pd.to_numeric(td[target_col], errors="coerce")
+            td = td.dropna(subset=[date_col, target_col])
+            if not td.empty:
+                td["_period"] = td[date_col].dt.to_period("M").astype(str)
+                monthly = td.groupby("_period")[target_col].sum().sort_index()  # chronological
+                if not monthly.empty:
+                    money = _money(target_col)
+                    lines = [f"  {p}: {_format_chat_metric(v, money=money)}" for p, v in monthly.items()]
+                    best = monthly.idxmax()
+                    return (f"Monthly {target_col.lower()} trend:\n" + "\n".join(lines) +
+                            f"\n\nPeak: {best} ({_format_chat_metric(monthly[best], money=money)})")
+
+    # Yearly breakdown
+    if "year" in lower and any(t in lower for t in ("trend", "by year", "each year", "annual", "yearly", "per year")):
+        date_col = _find_datetime_column(df.copy())
+        target_col = metric_col if metric_col and metric_col in df.columns and metric_col != "Order ID" else numeric_target
+        if date_col and target_col and pd.api.types.is_numeric_dtype(df[target_col]):
+            td = df[[date_col, target_col]].copy()
+            td[date_col] = pd.to_datetime(td[date_col], errors="coerce")
+            td[target_col] = pd.to_numeric(td[target_col], errors="coerce")
+            td = td.dropna(subset=[date_col, target_col])
+            if not td.empty:
+                td["_yr"] = td[date_col].dt.year.astype(str)
+                yearly = td.groupby("_yr")[target_col].sum().sort_index()
+                money = _money(target_col)
+                lines = [f"  {yr}: {_format_chat_metric(v, money=money)}" for yr, v in yearly.items()]
+                return f"Yearly {target_col.lower()} breakdown:\n" + "\n".join(lines)
+
+    # Specific value filter: "profit for Technology", "sales in West region"
+    # Catches: "X for [value]", "X in [value]", "[value] X"
+    _filter_preps = (" for ", " in ", " of ")
+    if any(prep in lower for prep in _filter_preps) and metric_col and metric_col in df.columns:
+        cat_col = _find_category_column(df)
+        reg_col = _find_region_column(df)
+        for group_col in [cat_col, reg_col]:
+            if not group_col:
+                continue
+            unique_vals = df[group_col].dropna().astype(str).str.lower().unique().tolist()
+            matched_val = next((v for v in unique_vals if v in lower), None)
+            if matched_val and pd.api.types.is_numeric_dtype(df[metric_col]):
+                mask = df[group_col].astype(str).str.lower() == matched_val
+                filtered = df[mask]
+                if not filtered.empty:
+                    total = filtered[metric_col].sum()
+                    display_val = df[group_col][mask].iloc[0]  # original casing
+                    return (f"{metric_col} for {display_val}: "
+                            f"{_format_chat_metric(total, money=_money(metric_col))}."
+                            f" ({len(filtered):,} records)")
+
+    # NLP pipeline fallback (schema/quality/profiling/aggregation intents)
+    if HAS_NLP:
+        try:
+            parsed = process_query(question, df=df, dataset_meta=meta)
+            result = execute_query(df, parsed)
+            data = result.get("data")
+            if parsed.get("intent") in {"schema", "quality", "profiling"}:
+                return generate_response(parsed, result)
+            if parsed.get("intent") == "aggregation" and not isinstance(data, pd.DataFrame):
+                return generate_response(parsed, result)
+        except Exception:
+            pass
+
+    return None
 
 
 def _strongest_correlation(df: pd.DataFrame):
@@ -1269,9 +1856,10 @@ async def stream(
     profit:   str = Query("All"),
     _user: dict = Depends(get_current_user),  # Fix 4 — stream auth
 ):
+    df = _get_df(_user)   # fetch once; gen() captures via closure
+
     async def gen():
         while True:
-            df = _get_df(_user)
             if df is not None:
                 f = _apply_filters(df, category, region, year, profit)
                 payload = json.dumps({
@@ -1385,19 +1973,34 @@ def _safe_execute(code: str, df: pd.DataFrame) -> tuple[bool, str]:
 
 
 def _build_schema_prompt(df: pd.DataFrame) -> str:
-    """Build a compact schema description for the code-generation prompt."""
+    """Build a compact schema description for the code-generation prompt.
+    Capped at 20 columns and trimmed sample values to keep prompts token-efficient.
+    """
     lines = ["DataFrame variable name: df"]
     lines.append(f"Shape: {len(df):,} rows × {len(df.columns)} columns")
     lines.append("")
-    lines.append("Columns (name | dtype | sample values):")
-    for col in df.columns:
+    # Cap at 20 columns — prioritise numeric and known-important columns
+    all_cols = df.columns.tolist()
+    important = [c for c in all_cols if c in {
+        "Sales", "Profit", "Revenue", "Quantity", "Discount",
+        "Order ID", "Customer ID", "Region", "Category", "Sub-Category",
+        "Product Name", "Order Date", "Ship Date", "shipping_delay_days",
+    }]
+    remaining = [c for c in all_cols if c not in important]
+    cols_to_show = (important + remaining)[:20]
+    if len(all_cols) > 20:
+        lines.append(f"Columns (showing 20 of {len(all_cols)} — name | dtype | sample values):")
+    else:
+        lines.append("Columns (name | dtype | sample values):")
+    for col in cols_to_show:
         dtype = str(df[col].dtype)
         try:
             if pd.api.types.is_numeric_dtype(df[col]):
-                sample = f"min={df[col].min():,.2f}, max={df[col].max():,.2f}, mean={df[col].mean():,.2f}"
+                # Compact: only min/max
+                sample = f"min={df[col].min():,.1f}, max={df[col].max():,.1f}"
             else:
-                top = df[col].dropna().value_counts().head(4).index.tolist()
-                sample = ", ".join(str(v) for v in top)
+                top = df[col].dropna().value_counts().head(3).index.tolist()
+                sample = ", ".join(str(v)[:20] for v in top)  # truncate long values
         except Exception:
             sample = "N/A"
         lines.append(f"  - {col} ({dtype}): {sample}")
@@ -1483,8 +2086,8 @@ Your personality: warm, direct, confident. Give real answers with real numbers.
 - For greetings: respond warmly and briefly
 - For data questions: lead with the number, then a short insight
 - Keep it 1-4 sentences
-- Never say "I cannot find" or "data is unavailable"
-- If completely unrelated to the dataset, say you're here to help with the data"""
+- If data is missing or filters returned nothing, say so honestly
+- For questions completely unrelated to data, say you're here to help with the dataset"""
 
     return [
         {"role": "system", "content": system},
@@ -1498,6 +2101,7 @@ def chat_message(req: ChatRequest, _user: dict = Depends(get_current_user)):
     df    = _get_df(_user)
     email = _user.get("sub", "anonymous")
     meta  = _get_upload_meta(_user)
+    filtered_df = _apply_request_filters(df, req.filters) if df is not None else None
 
     if email not in _chat_history:
         _chat_history[email] = []
@@ -1505,23 +2109,34 @@ def chat_message(req: ChatRequest, _user: dict = Depends(get_current_user)):
     if len(_chat_history[email]) > 20:
         _chat_history[email] = _chat_history[email][-20:]
 
+    fast_response = _try_structured_chat_response(req.message, filtered_df, meta, history=_chat_history.get(email, []))
+    if fast_response:
+        _chat_history[email].append({"role": "assistant", "content": fast_response})
+        return {
+            "reply": fast_response,
+            "intent": "structured",
+            "history": _chat_history[email][-6:],
+            "suggestions": meta.get("suggestions", []),
+        }
+
     groq = _get_groq_client()
 
     if groq is None:
         # No Groq key — fall back to NLP pipeline
         response = "Groq API key not configured. Please set GROQ_API_KEY."
-        if HAS_NLP and df is not None:
+        if HAS_NLP and filtered_df is not None:
             try:
-                parsed   = process_query(req.message, df=df, dataset_meta=meta)
-                result   = execute_query(df, parsed)
+                parsed   = process_query(req.message, df=filtered_df, dataset_meta=meta)
+                result   = execute_query(filtered_df, parsed)
                 response = generate_response(parsed, result)
             except Exception:
                 pass
         _chat_history[email].append({"role": "assistant", "content": response})
-        return {"reply": response, "intent": None, "history": _chat_history[email][-6:], "suggestions": []}
+        return {"reply": response, "intent": None, "history": _chat_history[email][-6:], "suggestions": meta.get("suggestions", [])}
 
     query_result = None
-    is_data_question = df is not None and not df.empty
+    groq_said_cannot_answer = False
+    is_data_question = filtered_df is not None and not filtered_df.empty
 
     # ── Step 1: Detect if this is a data question or a greeting/chitchat ──────
     # Simple heuristic — skip code generation for short greetings
@@ -1531,10 +2146,25 @@ def chat_message(req: ChatRequest, _user: dict = Depends(get_current_user)):
     is_greeting = any(msg_lower == g or msg_lower.startswith(g + " ") or msg_lower.startswith(g + "!") or msg_lower.startswith(g + ",")
                       for g in greeting_patterns)
 
-    # ── Step 2: Generate and execute pandas code (only for data questions) ────
-    if is_data_question and not is_greeting:
+    # Fix 4: Skip code-gen entirely if question has no data-related terms.
+    # Prevents burning tokens on questions like "who are you", "what can you do".
+    _DATA_TERMS = {
+        "total", "sum", "average", "avg", "mean", "count", "max", "min",
+        "top", "bottom", "highest", "lowest", "trend", "compare", "by region",
+        "by category", "profit", "sales", "revenue", "order", "quantity",
+        "discount", "month", "year", "over time", "performance", "product",
+        "customer", "row", "record", "column", "field", "schema", "missing",
+        "duplicate", "quality", "outlier", "forecast", "predict", "growth",
+        "how many", "what is the", "show me", "list", "find",
+    }
+    has_data_terms = any(term in msg_lower for term in _DATA_TERMS)
+    if not has_data_terms and filtered_df is not None:
+        has_data_terms = any(col.lower() in msg_lower for col in filtered_df.columns)
+
+    # ── Step 2: Generate and execute pandas code (only for real data questions) ─
+    if is_data_question and not is_greeting and has_data_terms:
         try:
-            code_messages = _build_code_gen_prompt(df, req.message)
+            code_messages = _build_code_gen_prompt(filtered_df, req.message)
             code_resp = groq.chat.completions.create(
                 model=GROQ_CHAT_MODEL,
                 messages=code_messages,
@@ -1543,23 +2173,40 @@ def chat_message(req: ChatRequest, _user: dict = Depends(get_current_user)):
             )
             generated_code = code_resp.choices[0].message.content.strip()
 
-            if generated_code and generated_code != "CANNOT_ANSWER":
-                success, result_str = _safe_execute(generated_code, df)
+            groq_said_cannot_answer = (generated_code == "CANNOT_ANSWER")
+            if generated_code and not groq_said_cannot_answer:
+                success, result_str = _safe_execute(generated_code, filtered_df)
                 if success:
                     query_result = result_str
         except Exception:
+            groq_said_cannot_answer = False
             query_result = None  # fall through to summary-based answer
+    else:
+        groq_said_cannot_answer = False
+
+    # Fix #6: if Groq said CANNOT_ANSWER and we have no query result,
+    # return a static response instead of burning a second Groq call.
+    if groq_said_cannot_answer and query_result is None:
+        static = (
+            "I wasn't able to build a data query for that. Try asking something like:\n"
+            "\u2022 'What is the total sales by region?'\n"
+            "\u2022 'Top 5 products by profit'\n"
+            "\u2022 'Average discount for Technology category'"
+        )
+        _chat_history[email].append({"role": "assistant", "content": static})
+        return {"reply": static, "intent": "cannot_answer",
+                "history": _chat_history[email][-6:], "suggestions": meta.get("suggestions", [])}
 
     # ── Step 3: Generate natural language answer ──────────────────────────────
     try:
-        answer_messages = _build_answer_prompt(df, meta, req.message, query_result)
+        answer_messages = _build_answer_prompt(filtered_df, meta, req.message, query_result)
 
-        # Inject conversation history for follow-up context
-        # Insert history between system and the final user message
+        # Fix 3: Inject only last 4 history messages (2 turns) to cap token use.
         system_msg = answer_messages[0]
         user_msg   = answer_messages[1]
         full_messages = [system_msg]
-        for h in _chat_history[email][:-1]:   # exclude just-appended user msg
+        recent_history = _chat_history[email][:-1]
+        for h in recent_history[-4:]:
             full_messages.append({"role": h["role"], "content": h["content"]})
         full_messages.append(user_msg)
 

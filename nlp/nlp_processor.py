@@ -86,6 +86,7 @@ def _find_column_match(query: str, df: Optional[pd.DataFrame]) -> Optional[str]:
     if not query_norm:
         return None
 
+    # Exact/substring match (original logic)
     matches: list[tuple[int, str]] = []
     for col in df.columns:
         col_norm = _normalise(col)
@@ -97,7 +98,24 @@ def _find_column_match(query: str, df: Optional[pd.DataFrame]) -> Optional[str]:
     if matches:
         matches.sort(reverse=True)
         return matches[0][1]
-    return None
+
+    # Fix #15: fuzzy partial-word match — catch "prodct" -> "Product Name" etc.
+    query_words = re.findall(r"[a-z0-9]+", query_norm)
+    best_col, best_score = None, 0
+    for col in df.columns:
+        col_words = re.findall(r"[a-z0-9]+", _normalise(col))
+        # score = fraction of col words found in query (allows minor typos via startswith)
+        hits = sum(
+            1 for cw in col_words
+            if any(qw.startswith(cw[:max(3, len(cw)-1)]) or cw.startswith(qw[:max(3, len(qw)-1)])
+                   for qw in query_words)
+        )
+        score = hits / max(1, len(col_words))
+        if score > 0.7 and score > best_score:
+            best_score = score
+            best_col = col
+
+    return best_col
 
 
 def process_query(query: str, df: Optional[pd.DataFrame] = None, dataset_meta: Optional[dict] = None) -> dict:
@@ -139,12 +157,23 @@ def process_query(query: str, df: Optional[pd.DataFrame] = None, dataset_meta: O
     metric_aliases = {
         "sales": "Sales",
         "revenue": "Sales",
+        "income": "Sales",
         "profit": "Profit",
+        "earnings": "Profit",
+        "margin": "Profit",
         "orders": "Order ID",
         "order": "Order ID",
         "region": "Region",
+        "area": "Region",
+        "location": "Region",
         "category": "Category",
+        "segment": "Category",
+        "type": "Category",
         "date": "Order Date",
+        "quantity": "Quantity",
+        "units": "Quantity",
+        "discount": "Discount",
+        "customer": "Customer ID",
     }
     for alias, metric in metric_aliases.items():
         if re.search(rf"\b{alias}\b", query_lower):
