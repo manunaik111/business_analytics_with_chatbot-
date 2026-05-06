@@ -16,6 +16,8 @@ import pandas as pd
 
 
 UPLOAD_DIR = Path("data") / "uploads"
+ACTIVE_UPLOAD_PATH = Path("data") / "_active_upload.pkl"
+ACTIVE_META_PATH = Path("data") / "_active_upload_meta.json"
 
 
 def _safe_user_key(user_id: str) -> str:
@@ -56,5 +58,32 @@ def load_user_meta(user_id: str) -> dict:
 def clear_user_upload(user_id: str) -> None:
     data_path, meta_path = _paths(user_id)
     for path in (data_path, meta_path):
+        if path.exists():
+            path.unlink()
+
+
+def save_active_upload(df: pd.DataFrame, meta: dict) -> None:
+    ACTIVE_UPLOAD_PATH.parent.mkdir(parents=True, exist_ok=True)
+    df.to_pickle(ACTIVE_UPLOAD_PATH)
+    ACTIVE_META_PATH.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+
+def load_active_upload() -> Optional[pd.DataFrame]:
+    if not ACTIVE_UPLOAD_PATH.exists():
+        return None
+    return pd.read_pickle(ACTIVE_UPLOAD_PATH)
+
+
+def load_active_meta() -> dict:
+    if not ACTIVE_META_PATH.exists():
+        return {}
+    try:
+        return json.loads(ACTIVE_META_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def clear_active_upload() -> None:
+    for path in (ACTIVE_UPLOAD_PATH, ACTIVE_META_PATH):
         if path.exists():
             path.unlink()

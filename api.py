@@ -53,7 +53,8 @@ except Exception:
 
 try:
     from data_management.upload_store import (
-        save_user_upload, load_user_upload, load_user_meta, clear_user_upload
+        save_user_upload, load_user_upload, load_user_meta, clear_user_upload,
+        save_active_upload, load_active_upload, load_active_meta, clear_active_upload
     )
     HAS_UPLOAD_STORE = True
 except Exception:
@@ -499,6 +500,11 @@ def _user_id(user: Optional[dict]) -> str:
 
 def _get_upload_meta(user: Optional[dict]) -> dict:
     if not user:
+        if HAS_UPLOAD_STORE:
+            try:
+                return load_active_meta()
+            except Exception:
+                return {}
         return {}
     uid = _user_id(user)
     if uid in _upload_meta_cache:
@@ -508,6 +514,12 @@ def _get_upload_meta(user: Optional[dict]) -> dict:
         if meta:
             _upload_meta_cache[uid] = meta
             return meta.copy()
+        try:
+            meta = load_active_meta()
+            if meta:
+                return meta.copy()
+        except Exception:
+            pass
     return {}
 
 
@@ -517,6 +529,7 @@ def _set_user_upload(user: dict, df: pd.DataFrame, meta: dict) -> None:
     _upload_meta_cache[uid] = meta.copy()
     if HAS_UPLOAD_STORE:
         save_user_upload(uid, df, meta)
+        save_active_upload(df, meta)
 
 
 def _clear_user_upload(user: dict) -> None:
@@ -525,10 +538,11 @@ def _clear_user_upload(user: dict) -> None:
     _upload_meta_cache.pop(uid, None)
     if HAS_UPLOAD_STORE:
         clear_user_upload(uid)
+        clear_active_upload()
 
 
 def _get_df(user: Optional[dict] = None) -> Optional[pd.DataFrame]:
-    """Return current user's uploaded df if available, else default CSV."""
+    """Return current user's uploaded df, else shared active df, else default CSV."""
     if user:
         uid = _user_id(user)
         if uid in _uploaded_df_cache:
@@ -542,6 +556,13 @@ def _get_df(user: Optional[dict] = None) -> Optional[pd.DataFrame]:
                     return stored.copy()
             except Exception:
                 pass
+    if HAS_UPLOAD_STORE:
+        try:
+            shared = load_active_upload()
+            if shared is not None:
+                return shared.copy()
+        except Exception:
+            pass
     if os.path.exists(DATA_FILE):
         try:
             df = pd.read_csv(DATA_FILE, encoding="utf-8-sig")
