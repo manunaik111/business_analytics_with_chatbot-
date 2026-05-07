@@ -64,8 +64,50 @@
       safe("sbUserRole",          el => el.textContent = role);
       safe("sbAvatar",            el => el.textContent = initials);
       safe("sbAvatarCollapsed",   el => el.textContent = initials);
+
+      // ── Manage Users: Admin only ──
       if (role === "Admin") { safe("usersNavLink", el => el.style.display = "flex"); }
-      safe("uploadCard",          el => el.style.display = canUpload(role) ? "" : "none");
+
+      // ── Upload card: Admin, Sales Manager, Analyst only ──
+      safe("uploadCard", el => el.style.display = canUpload(role) ? "" : "none");
+
+      // ── Sidebar nav: hide Profiling/Quality/Predictive for Executive & Viewer ──
+      const limitedRoles = ["Executive", "Viewer"];
+      if (limitedRoles.includes(role)) {
+        ["sbNavProfiling","sbNavQuality","sbNavAnalytics"].forEach(id => {
+          safe(id, el => el.style.display = "none");
+        });
+      }
+
+      // ── AI Insights section: hide for Viewer ──
+      if (role === "Viewer") {
+        safe("insightsSection", el => el.style.display = "none");
+      }
+
+      // ── Raw data table: hide for Executive & Viewer ──
+      if (limitedRoles.includes(role)) {
+        safe("rawDataSection", el => el.style.display = "none");
+      }
+
+      // ── Download buttons: hide for Viewer ──
+      if (role === "Viewer") {
+        safe("exportFilteredBtn",  el => el.style.display = "none");
+        safe("downloadSummaryBtn", el => el.style.display = "none");
+      }
+
+      // ── Access-denied toast if redirected from a restricted page ──
+      const params = new URLSearchParams(window.location.search);
+      const denied = params.get("denied");
+      if (denied && window.App) {
+        const names = { profiling:"Dataset Profiling", quality:"Data Quality", analytics:"Predictive Analytics" };
+        App.showToast("Access denied: " + (names[denied] || denied) + " requires Admin, Sales Manager or Analyst role.", "error");
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+
+      // ── Change Password: hide for system admin ──
+      if (email.toLowerCase() === "admin@sales.com") {
+        safe("changePwdBtnWrap", el => el.style.display = "none");
+      }
     }
 
     function canUpload(role) {
@@ -1503,4 +1545,110 @@
     window.quickAsk      = quickAsk;
     window.sendMsg       = sendMsg;
     window.signOut       = signOut;
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       CHANGE PASSWORD
+    ═══════════════════════════════════════════════════════════════════════ */
+    function openChangePwdModal() {
+      const user = window.App && App.getUser ? App.getUser() : null;
+      const email = (user && user.email) || localStorage.getItem("userEmail") || "";
+      // Block admin client-side too
+      if (email.toLowerCase() === "admin@sales.com") {
+        App.showToast("The system admin password cannot be changed via this interface.", "error");
+        return;
+      }
+      // Reset fields
+      ["cpCurrent","cpNew","cpConfirm"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.value = ""; el.type = "password"; }
+      });
+      const err = document.getElementById("cpError");
+      if (err) { err.style.display = "none"; err.textContent = ""; }
+      const btn = document.getElementById("cpSubmitBtn");
+      if (btn) { btn.disabled = false; btn.textContent = "Update Password"; }
+      const modal = document.getElementById("changePwdModal");
+      if (modal) { modal.style.display = "flex"; }
+    }
+
+    function closeChangePwdModal() {
+      const modal = document.getElementById("changePwdModal");
+      if (modal) modal.style.display = "none";
+    }
+
+    function toggleCpEye(inputId, btnId) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      const isHidden = input.type === "password";
+      input.type = isHidden ? "text" : "password";
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.innerHTML = isHidden
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
+        : `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+    }
+
+    function _setCpError(msg) {
+      const el = document.getElementById("cpError");
+      if (!el) return;
+      el.textContent = msg;
+      el.style.display = msg ? "block" : "none";
+    }
+
+    async function submitChangePassword() {
+      const current = (document.getElementById("cpCurrent")  || {}).value || "";
+      const newPwd  = (document.getElementById("cpNew")      || {}).value || "";
+      const confirm = (document.getElementById("cpConfirm")  || {}).value || "";
+
+      _setCpError("");
+
+      if (!current) { _setCpError("Please enter your current password."); return; }
+      if (newPwd.length < 8) { _setCpError("New password must be at least 8 characters."); return; }
+      if (newPwd !== confirm) { _setCpError("New password and confirmation do not match."); return; }
+      if (newPwd === current) { _setCpError("New password must be different from the current password."); return; }
+
+      const btn = document.getElementById("cpSubmitBtn");
+      if (btn) { btn.disabled = true; btn.textContent = "Updating..."; }
+
+      // ── Try backend first ──
+      if (window.App && App.hasConfiguredBackend()) {
+        try {
+          await App.request("/api/auth/change-password", {
+            method: "POST",
+            body: { current_password: current, new_password: newPwd }
+          });
+          closeChangePwdModal();
+          App.showToast("Password updated successfully!", "success");
+          return;
+        } catch (err) {
+          if (btn) { btn.disabled = false; btn.textContent = "Update Password"; }
+          _setCpError(err.message || "Failed to update password.");
+          return;
+        }
+      }
+
+      // ── Demo / offline fallback: update localStorage ──
+      const user = App.getUser ? App.getUser() : null;
+      const email = (user && user.email) || localStorage.getItem("userEmail") || "";
+      const demoUsers = App.getDemoUsers ? App.getDemoUsers() : [];
+      const idx = demoUsers.findIndex(u => u.email.toLowerCase() === email.toLowerCase());
+      if (idx === -1) {
+        if (btn) { btn.disabled = false; btn.textContent = "Update Password"; }
+        _setCpError("Could not find your account in local storage.");
+        return;
+      }
+      if (demoUsers[idx].password !== current) {
+        if (btn) { btn.disabled = false; btn.textContent = "Update Password"; }
+        _setCpError("Current password is incorrect.");
+        return;
+      }
+      demoUsers[idx].password = newPwd;
+      if (App.saveDemoUsers) App.saveDemoUsers(demoUsers);
+      closeChangePwdModal();
+      App.showToast("Password updated successfully (offline mode)!", "success");
+    }
+
+    window.openChangePwdModal    = openChangePwdModal;
+    window.closeChangePwdModal   = closeChangePwdModal;
+    window.toggleCpEye           = toggleCpEye;
+    window.submitChangePassword  = submitChangePassword;
   })();

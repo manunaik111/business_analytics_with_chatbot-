@@ -1549,6 +1549,35 @@ def get_me(_user: dict = Depends(get_current_user)):
     }
 
 # ═════════════════════════════════════════════════════════════════════════════
+
+# -----------------------------------------------------------------------------
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+@app.post('/api/auth/change-password')
+def change_password(req: ChangePasswordRequest, _user: dict = Depends(get_current_user)):
+    email = _user.get('sub', '').lower().strip()
+    if email == 'admin@sales.com':
+        raise HTTPException(403, 'The system admin password cannot be changed via this interface.')
+    users = _load_users()
+    user  = users.get(email)
+    if not user:
+        raise HTTPException(404, 'User account not found.')
+    pw_stored = user.get('password', '')
+    valid = (pwd_ctx.verify(req.current_password, pw_stored)
+             if pw_stored.startswith('')
+             else req.current_password == pw_stored)
+    if not valid:
+        raise HTTPException(401, 'Current password is incorrect.')
+    if len(req.new_password) < 8:
+        raise HTTPException(422, 'New password must be at least 8 characters.')
+    if req.new_password == req.current_password:
+        raise HTTPException(422, 'New password must be different from the current password.')
+    users[email]['password'] = pwd_ctx.hash(req.new_password)
+    _save_users(users)
+    return {'message': 'Password changed successfully.'}
+
 # 2. USER MANAGEMENT (Admin only)
 # ═════════════════════════════════════════════════════════════════════════════
 @app.get("/api/users")

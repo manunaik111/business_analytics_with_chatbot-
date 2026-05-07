@@ -77,6 +77,16 @@
     .email-row { position:relative; }
     .email-row .input-field { padding-right:50px; }
 
+    /* ── Password row with eye toggle ── */
+    .pw-row { position:relative; }
+    .pw-row .input-field { padding-right:46px; }
+    .eye-btn {
+      position:absolute; right:12px; top:50%; transform:translateY(-50%);
+      background:none; border:none; cursor:pointer; padding:4px;
+      color:var(--text-muted); transition:color 0.2s; display:flex; align-items:center;
+    }
+    .eye-btn:hover { color:var(--white); }
+
     /* ── Submit (circle arrow) ── */
     .circle-btn {
       position:absolute; right:8px; top:50%; transform:translateY(-50%);
@@ -155,11 +165,17 @@
       <!-- Password (revealed after email) -->
       <div class="input-group" id="pwGroup" style="display:none;">
         <label class="input-label" for="loginPw">Password</label>
-        <input
-          type="password" id="loginPw" class="input-field"
-          placeholder="Enter your password" autocomplete="current-password"
-          onkeydown="if(event.key==='Enter') doLogin()"
-        />
+        <div class="pw-row">
+          <input
+            type="password" id="loginPw" class="input-field"
+            placeholder="Enter your password" autocomplete="current-password"
+            onkeydown="if(event.key==='Enter') doLogin()"
+          />
+          <button class="eye-btn" type="button" onclick="togglePw('loginPw', this)" tabindex="-1" title="Show / hide password">
+            <!-- eye icon (default: hidden) -->
+            <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
       </div>
 
       <!-- Sign In button -->
@@ -195,6 +211,7 @@
       if (!pw)    { showError('Please enter your password.'); return; }
       clearError();
 
+      // ── Try real backend first ────────────────────────────────────
       if (window.App && App.hasConfiguredBackend()) {
         try {
           const response = await App.request('/api/auth/login', {
@@ -206,31 +223,46 @@
             accessToken: response.access_token || response.token,
             user: response.user || {
               email,
-              role: response.role || (email.toLowerCase().includes('admin') ? 'Admin' : 'Viewer'),
+              role: response.role || 'Viewer',
               name: email.split('@')[0]
             }
           });
           setTimeout(() => { window.location.href = 'dashboard.html'; }, 250);
           return;
         } catch (error) {
-          showError(error.message || 'Backend sign in failed. Trying demo mode...');
+          // Backend returned an error (e.g. 401 wrong password) — block login
+          showError(error.message || 'Invalid email or password.');
+          return;
         }
       }
 
-      localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('userEmail', email);
-      localStorage.setItem('userRole', email.toLowerCase().includes('admin') ? 'Admin' : 'Viewer');
-      if (window.App) {
-        App.setSession({
-          accessToken: 'demo-session',
-          user: {
-            email,
-            role: email.toLowerCase().includes('admin') ? 'Admin' : 'Viewer',
-            name: email.split('@')[0]
-          }
-        });
+      // ── Offline / demo mode — validate against local demo users ──
+      const demoUsers = window.App ? App.getDemoUsers() : [];
+      const match = demoUsers.find(
+        u => u.email.toLowerCase() === email.toLowerCase() && u.password === pw
+      );
+      if (!match) {
+        showError('Invalid email or password. Please try again.');
+        return;
       }
-      setTimeout(() => { window.location.href = 'dashboard.html'; }, 350);
+      // Credentials matched — create session
+      App.setSession({
+        accessToken: 'demo-session-' + Date.now(),
+        user: {
+          email: match.email,
+          role:  match.role  || 'Viewer',
+          name:  match.name  || match.email.split('@')[0]
+        }
+      });
+      setTimeout(() => { window.location.href = 'dashboard.html'; }, 250);
+    }
+    function togglePw(inputId, btn) {
+      const input = document.getElementById(inputId);
+      const isHidden = input.type === 'password';
+      input.type = isHidden ? 'text' : 'password';
+      btn.innerHTML = isHidden
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
+        : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
     }
     function showError(msg) {
       const el = document.getElementById('loginError');
