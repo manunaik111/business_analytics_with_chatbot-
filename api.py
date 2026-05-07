@@ -211,6 +211,9 @@ security = HTTPBearer(auto_error=False)
 
 app = FastAPI(title="Zero Click AI API", version="2.1.0")
 
+# Initialise user store once at process startup — never on each request
+_init_user_store()
+
 # Fix 3 — Serve frontend from one URL (FastAPI serves everything)
 _frontend_path = os.path.join(os.path.dirname(__file__), "frontend")
 if os.path.isdir(_frontend_path):
@@ -391,8 +394,11 @@ def _migrate_legacy_user_dbs(conn) -> None:
         if source_path == target_path or not os.path.exists(source_path):
             continue
 
-        legacy_conn = sqlite3.connect(source_path)
-        legacy_conn.row_factory = sqlite3.Row
+        try:
+            legacy_conn = sqlite3.connect(source_path, timeout=10)
+            legacy_conn.row_factory = sqlite3.Row
+        except Exception:
+            continue
         try:
             has_app_users = legacy_conn.execute(
                 "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
@@ -423,11 +429,21 @@ def _migrate_legacy_user_dbs(conn) -> None:
                         row["is_active"],
                     ),
                 )
+        except Exception:
+            pass
         finally:
             legacy_conn.close()
 
 
+# Track whether the user store has been initialised this process lifetime
+_user_store_ready = False
+
+
 def _init_user_store() -> None:
+    """Run once at startup — creates tables, migrates legacy data, seeds defaults."""
+    global _user_store_ready
+    if _user_store_ready:
+        return
     conn = _user_db_conn()
     try:
         conn.execute(
@@ -447,12 +463,12 @@ def _init_user_store() -> None:
         _seed_default_users(conn)
         _seed_team_users(conn)
         conn.commit()
+        _user_store_ready = True
     finally:
         conn.close()
 
 
 def _load_users() -> dict:
-    _init_user_store()
     conn = _user_db_conn()
     try:
         rows = conn.execute(
