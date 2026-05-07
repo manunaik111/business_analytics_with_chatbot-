@@ -176,20 +176,23 @@ USER_DB_TABLE = "app_users"
 LEGACY_USERS_FILE = "users.json"
 DATA_FILE    = os.path.join("data", "SALES_DATA_SETT.csv")
 TEAM_SEED_USERS = [
-    {"name": "Naheen Kauser", "email": "naheenkauser113@gmail.com", "password": "naheenkauser113", "role": "Admin"},
-    {"name": "Dhaval Shah", "email": "d34058397@gmail.com", "password": "d34058397", "role": "Admin"},
-    {"name": "Mohammed Ammar", "email": "mohammedammar060802@gmail.com", "password": "mohammedammar060802", "role": "Admin"},
-    {"name": "Yusuf Chonche", "email": "yusufchonche0@gmail.com", "password": "yusufchonche0", "role": "Admin"},
-    {"name": "Vaishnavi Metri", "email": "vaishnavimetri234@gmail.com", "password": "vaishnavimetri234", "role": "Admin"},
-    {"name": "Anoosha Kembhavi", "email": "anooshakembhavi@gmail.com", "password": "anooshakembhavi", "role": "Admin"},
-    {"name": "Snehal Kamble", "email": "kamblesnehal578@gmail.com", "password": "kamblesnehal578", "role": "Admin"},
-    {"name": "Nazhat Naikwadi", "email": "nazhatnaikwadi@gmail.com", "password": "nazhatnaikwadi", "role": "Admin"},
-    {"name": "Keerti Gadigeppagoudar", "email": "keerti.s.g2020@gmail.com", "password": "keerti.s.g2020", "role": "Admin"},
-    {"name": "Samruddhi Patil", "email": "patilsamruddhi863@gmail.com", "password": "patilsamruddhi863", "role": "Admin"},
+    {"name": "Sales Admin",            "email": "admin@sales.com",                  "password": "Admin@1234",              "role": "Admin"},
+    {"name": "Manu Naik",              "email": "manupnaik639@gmail.com",           "password": "manupnaik639",            "role": "Admin"},
+    {"name": "manu",                   "email": "manu@sales.com",                   "password": "manu@sales",              "role": "Executive"},
+    {"name": "Naheen Kauser",          "email": "naheenkauser113@gmail.com",        "password": "naheenkauser113",         "role": "Admin"},
+    {"name": "Dhaval Shah",            "email": "d34058397@gmail.com",              "password": "d34058397",               "role": "Admin"},
+    {"name": "Mohammed Ammar",         "email": "mohammedammar060802@gmail.com",    "password": "mohammedammar060802",     "role": "Admin"},
+    {"name": "Yusuf Chonche",          "email": "yusufchonche0@gmail.com",          "password": "yusufchonche0",           "role": "Admin"},
+    {"name": "Vaishnavi Metri",        "email": "vaishnavimetri234@gmail.com",      "password": "vaishnavimetri234",       "role": "Admin"},
+    {"name": "Anoosha Kembhavi",       "email": "anooshakembhavi@gmail.com",        "password": "anooshakembhavi",         "role": "Admin"},
+    {"name": "Snehal Kamble",          "email": "kamblesnehal578@gmail.com",        "password": "kamblesnehal578",         "role": "Admin"},
+    {"name": "Nazhat Naikwadi",        "email": "nazhatnaikwadi@gmail.com",         "password": "nazhatnaikwadi",          "role": "Admin"},
+    {"name": "Keerti Gadigeppagoudar", "email": "keerti.s.g2020@gmail.com",        "password": "keerti.s.g2020",          "role": "Admin"},
+    {"name": "Samruddhi Patil",        "email": "patilsamruddhi863@gmail.com",      "password": "patilsamruddhi863",       "role": "Admin"},
 ]
 LEGACY_USER_DB_PATHS = [
     os.path.join("database", "scheduler.db"),
-    os.path.join("database", "users.db"),
+    # database/users.db intentionally excluded — it IS USER_DB_PATH, migrating from itself causes lock
 ]
 ALLOWED_ORIGINS = [
     origin.strip()
@@ -306,8 +309,11 @@ def _require_email_enabled() -> None:
 # USER STORAGE
 # ═════════════════════════════════════════════════════════════════════════════
 def _user_db_conn():
-    conn = sqlite3.connect(USER_DB_PATH)
+    conn = sqlite3.connect(USER_DB_PATH, timeout=30, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    # WAL mode allows concurrent reads without locking
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")
     return conn
 
 
