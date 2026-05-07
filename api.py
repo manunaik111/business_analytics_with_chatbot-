@@ -211,9 +211,6 @@ security = HTTPBearer(auto_error=False)
 
 app = FastAPI(title="Zero Click AI API", version="2.1.0")
 
-# Initialise user store once at process startup — never on each request
-_init_user_store()
-
 # Fix 3 — Serve frontend from one URL (FastAPI serves everything)
 _frontend_path = os.path.join(os.path.dirname(__file__), "frontend")
 if os.path.isdir(_frontend_path):
@@ -222,6 +219,12 @@ if os.path.isdir(_frontend_path):
 @app.get("/")
 def frontend_root():
     return RedirectResponse(url="/app/")
+
+
+@app.on_event("startup")
+def on_startup():
+    """Run once when the server starts — initialise user store safely."""
+    _init_user_store()
 
 app.add_middleware(
     CORSMiddleware,
