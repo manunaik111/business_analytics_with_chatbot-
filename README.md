@@ -45,7 +45,7 @@ The platform was designed and built from scratch by a team of 11 interns across 
 ## Features
 
 ### Core Platform
-- **Role-based authentication** — JWT-secured login, registration, and per-role permission enforcement
+- **Role-based authentication** — JWT-secured login, registration, self-service password change, and per-role permission enforcement
 - **Universal file upload** — CSV, Excel (.xlsx, .xls), and JSON with automatic schema detection
 - **Per-user dataset isolation** — each user's uploaded data is stored and served independently
 - **Adaptive dashboard** — KPIs, charts, and insights that automatically adjust to any dataset type
@@ -328,14 +328,15 @@ All endpoints require a `Bearer` JWT token in the `Authorization` header unless 
 
 ### Authentication
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/auth/login` | Login — returns JWT token |
-| `POST` | `/api/auth/register` | Register new user |
-| `GET` | `/api/auth/me` | Get current user profile |
-| `GET` | `/api/users` | List all users (Admin only) |
-| `PUT` | `/api/users/role` | Update user role (Admin only) |
-| `DELETE` | `/api/users/{email}` | Delete user (Admin only) |
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/auth/login` | Public | Login — returns JWT token |
+| `POST` | `/api/auth/register` | Public | Register new user (role defaults to Viewer) |
+| `GET` | `/api/auth/me` | Required | Get current user profile + permissions |
+| `POST` | `/api/auth/change-password` | Required | Change own password (non-admin users only) |
+| `GET` | `/api/users` | Admin only | List all users |
+| `PUT` | `/api/users/role` | Admin only | Update user role |
+| `DELETE` | `/api/users/{email}` | Admin only | Delete user |
 
 ### Dashboard & Data
 
@@ -477,7 +478,7 @@ Email:    admin@sales.com
 Password: Admin@1234
 ```
 
-> Change this password immediately after first login.
+> **Note:** The `admin@sales.com` system account is protected — its password cannot be changed via the UI. All other users can change their password from the sidebar after logging in.
 
 ---
 
@@ -523,6 +524,9 @@ uvicorn api:app --host 0.0.0.0 --port $PORT
 | Predictive analytics | ✅ | ✅ | ✅ | — | — |
 | Schedule email | ✅ | — | — | — | — |
 | Manage users | ✅ | — | — | — | — |
+| **Change own password** | — | ✅ | ✅ | ✅ | ✅ |
+
+> **Note:** The `admin@sales.com` system account cannot change its password via the UI. All other roles can update their password from the sidebar after login. The new password is saved as a bcrypt hash in `database/users.db`.
 
 ---
 

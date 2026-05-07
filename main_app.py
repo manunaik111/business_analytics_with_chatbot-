@@ -16,6 +16,9 @@ sys.path.append(os.path.dirname(__file__))
 from data_management.file_upload import file_upload_section
 from data_management.dataset_profiling import dataset_profiling_section
 from data_management.data_quality import data_quality_section
+from data_management.upload_store import (
+    save_active_upload, load_active_upload, load_active_meta, clear_active_upload
+)
 
 # ── Team 2 ────────────────────────────────────────────────────────────────
 from nlp.nlp_processor import process_query
@@ -47,7 +50,7 @@ from auth import (
     logout_user, can, show_landing_page, show_login_page,
     show_register_page, show_user_management,
     PERM_VIEW_DASHBOARD, PERM_VIEW_RAW_DATA, PERM_USE_CHATBOT,
-    PERM_DOWNLOAD_EXCEL, PERM_DOWNLOAD_PDF, PERM_MANAGE_USERS,
+    PERM_DOWNLOAD_EXCEL, PERM_DOWNLOAD_PDF, PERM_UPLOAD_DATA, PERM_MANAGE_USERS,
     PERM_VIEW_AI_INSIGHTS, PERM_VIEW_ALL_CHARTS,
     ROLE_COLORS,
     show_skeleton_kpi, show_skeleton_chart, show_progress_bar,
@@ -91,6 +94,16 @@ for k, v in [
 ]:
     if k not in st.session_state:
         st.session_state[k] = v
+
+sync_session_uploaded_df()
+
+allowed_pages = ["Dashboard", "Meet Our Team", "Settings"]
+if can(PERM_VIEW_ALL_CHARTS):
+    allowed_pages.extend(["Visualization", "Predictive Analytics"])
+if can(PERM_UPLOAD_DATA):
+    allowed_pages.extend(["Data Upload", "Dataset Profiling", "Data Quality"])
+if st.session_state.module_page not in allowed_pages:
+    st.session_state.module_page = "Dashboard"
 
 st.session_state.current_page = 'dashboard'
 
@@ -300,26 +313,75 @@ div[data-testid="stAlert"] {
 # ══════════════════════════════════════════════════════════════════════════
 # DATA HELPERS
 # ══════════════════════════════════════════════════════════════════════════
+def prepare_dataset(source_df):
+    if source_df is None:
+        return None
+
+    prepared = source_df.copy()
+
+    if "Order Date" in prepared.columns:
+        prepared["Order Date"] = pd.to_datetime(prepared["Order Date"], dayfirst=True, errors="coerce")
+    if "Ship Date" in prepared.columns:
+        prepared["Ship Date"] = pd.to_datetime(prepared["Ship Date"], dayfirst=True, errors="coerce")
+
+    if (
+        "shipping_delay_days" not in prepared.columns
+        and "Order Date" in prepared.columns
+        and "Ship Date" in prepared.columns
+    ):
+        prepared["shipping_delay_days"] = (
+            prepared["Ship Date"] - prepared["Order Date"]
+        ).dt.days.fillna(0)
+
+    if "Order Date" in prepared.columns:
+        prepared["Year"] = prepared["Order Date"].dt.year
+        prepared["Month"] = prepared["Order Date"].dt.to_period("M")
+        prepared["MonthStr"] = prepared["Month"].astype(str)
+
+    for col in ["Category", "Region"]:
+        if col in prepared.columns:
+            prepared[col] = prepared[col].fillna("Unknown")
+
+    return prepared
+
+
+def load_shared_active_df():
+    try:
+        shared_df = load_active_upload()
+        if shared_df is None:
+            return None, {}
+        return prepare_dataset(shared_df), load_active_meta()
+    except Exception:
+        return None, {}
+
+
+def sync_session_uploaded_df():
+    if st.session_state.get("uploaded_df") is not None:
+        st.session_state["uploaded_df"] = prepare_dataset(st.session_state["uploaded_df"])
+        return
+
+    shared_df, shared_meta = load_shared_active_df()
+    if shared_df is not None:
+        st.session_state["uploaded_df"] = shared_df
+        if shared_meta.get("file_name"):
+            st.session_state["file_name"] = shared_meta["file_name"]
+
+
 @st.cache_data
 def load_data():
+    shared_df, _ = load_shared_active_df()
+    if shared_df is not None and not shared_df.empty:
+        return shared_df
+
     analyzer = get_analyzer()
-    df = analyzer.df.copy()
-    df["Order Date"] = pd.to_datetime(df["Order Date"], dayfirst=True, errors="coerce")
-    df["Ship Date"]  = pd.to_datetime(df["Ship Date"],  dayfirst=True, errors="coerce")
-    if "shipping_delay_days" not in df.columns:
-        df["shipping_delay_days"] = (df["Ship Date"] - df["Order Date"]).dt.days.fillna(0)
-    df["Year"]     = df["Order Date"].dt.year
-    df["Month"]    = df["Order Date"].dt.to_period("M")
-    df["MonthStr"] = df["Month"].astype(str)
-    for col in ["Category", "Region"]:
-        if col in df.columns:
-            df[col] = df[col].fillna("Unknown")
-    return df
+    return prepare_dataset(analyzer.df.copy())
+
 
 def get_active_df():
-    """Returns uploaded df if available, else default dataset."""
+    """Returns the active uploaded dataset if available, else the default dataset."""
+    sync_session_uploaded_df()
     if st.session_state.get("uploaded_df") is not None:
-        return st.session_state["uploaded_df"]
+        return prepare_dataset(st.session_state["uploaded_df"])
     return df
 
 def apply_filters(df, cat, region, year, profit):
@@ -418,6 +480,9 @@ PAGES = ["Dashboard", "Visualization", "Predictive Analytics",
          "Data Upload", "Dataset Profiling", "Data Quality",
          "Meet Our Team", "Settings"]
 
+active_sidebar_df = get_active_df()
+active_dataset_ready = active_sidebar_df is not None and not active_sidebar_df.empty
+
 with st.sidebar:
     # Brand
     st.markdown("""
@@ -435,7 +500,12 @@ with st.sidebar:
 
     # Dashboards nav group
     st.markdown('<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,0.28);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px">Dashboards</div>', unsafe_allow_html=True)
-    for p in ["Dashboard", "Visualization", "Predictive Analytics"]:
+    dashboard_pages = ["Dashboard"]
+    if can(PERM_VIEW_ALL_CHARTS):
+        dashboard_pages.append("Visualization")
+    if can(PERM_VIEW_AI_INSIGHTS):
+        dashboard_pages.append("Predictive Analytics")
+    for p in dashboard_pages:
         icons = {"Dashboard": "📊", "Visualization": "📈", "Predictive Analytics": "🔮"}
         is_on = st.session_state.module_page == p
         if st.button(f"{icons[p]}  {p}", key=f"nav_{p}", use_container_width=True,
@@ -445,25 +515,30 @@ with st.sidebar:
     st.divider()
 
     # Data nav group
-    st.markdown('<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,0.28);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px">Data</div>', unsafe_allow_html=True)
-    for p in ["Data Upload", "Dataset Profiling", "Data Quality"]:
-        icons2 = {"Data Upload": "📁", "Dataset Profiling": "📋", "Data Quality": "🔍"}
-        is_on = st.session_state.module_page == p
-        if st.button(f"{icons2[p]}  {p}", key=f"nav_{p}", use_container_width=True,
-                     type="primary" if is_on else "secondary"):
-            st.session_state.module_page = p; st.rerun()
+    if can(PERM_UPLOAD_DATA):
+        st.markdown('<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,0.28);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px">Data</div>', unsafe_allow_html=True)
+        for p in ["Data Upload", "Dataset Profiling", "Data Quality"]:
+            icons2 = {"Data Upload": "UP", "Dataset Profiling": "PR", "Data Quality": "DQ"}
+            is_on = st.session_state.module_page == p
+            if st.button(f"{icons2[p]}  {p}", key=f"nav_{p}", use_container_width=True,
+                         type="primary" if is_on else "secondary"):
+                st.session_state.module_page = p; st.rerun()
 
     st.divider()
 
     # Filters (only on Dashboard page when data loaded)
-    if st.session_state.module_page == "Dashboard" and dataset_loaded and not df.empty:
+    if st.session_state.module_page == "Dashboard" and active_dataset_ready:
         st.markdown('<div style="font-size:9px;font-weight:600;color:rgba(255,255,255,0.28);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px">Filters</div>', unsafe_allow_html=True)
-        years = sorted(df["Year"].dropna().unique().astype(int).tolist())
+        filter_source_df = active_sidebar_df.copy()
+        years = sorted(filter_source_df["Year"].dropna().unique().astype(int).tolist()) if "Year" in filter_source_df.columns else []
         for k, v in [("year","All"),("category","All"),("region","All"),("profit_status","All")]:
             if k not in st.session_state: st.session_state[k] = v
 
-        sel_cat    = st.selectbox("Category",      ["All"]+sorted(df["Category"].unique()), key="category")
-        sel_region = st.selectbox("Region",        ["All"]+sorted(df["Region"].unique()),   key="region")
+        cat_options = ["All"] + sorted(filter_source_df["Category"].dropna().astype(str).unique().tolist()) if "Category" in filter_source_df.columns else ["All"]
+        region_options = ["All"] + sorted(filter_source_df["Region"].dropna().astype(str).unique().tolist()) if "Region" in filter_source_df.columns else ["All"]
+
+        sel_cat    = st.selectbox("Category",      cat_options, key="category")
+        sel_region = st.selectbox("Region",        region_options, key="region")
         sel_profit = st.selectbox("Profit Status", ["All","Profitable","Loss Making"],       key="profit_status")
         sel_year   = st.selectbox("Year",          ["All"]+[str(y) for y in years],         key="year")
 
@@ -473,7 +548,7 @@ with st.sidebar:
                 if k in st.session_state: del st.session_state[k]
             st.rerun()
 
-        filtered_df = apply_filters(df, sel_cat, sel_region, sel_year, sel_profit)
+        filtered_df = apply_filters(filter_source_df, sel_cat, sel_region, sel_year, sel_profit)
 
         # Quick analysis
         if not filtered_df.empty:
@@ -495,7 +570,7 @@ with st.sidebar:
             except Exception:
                 pass
     else:
-        filtered_df = df.copy() if dataset_loaded else pd.DataFrame()
+        filtered_df = active_sidebar_df.copy() if active_dataset_ready else pd.DataFrame()
         sel_cat = sel_region = sel_year = sel_profit = "All"
 
     st.divider()
@@ -968,29 +1043,44 @@ elif page == "Predictive Analytics":
 # PAGE: DATA UPLOAD (Team 1)
 # ══════════════════════════════════════════════════════════════════════════
 elif page == "Data Upload":
-    uploaded = file_upload_section()
-    if uploaded is not None:
-        st.session_state["uploaded_df"] = uploaded
-        load_data.clear()
-        st.success("Dataset ready. Navigate to Dashboard to view analytics.")
+    if not can(PERM_UPLOAD_DATA):
+        st.warning("Your role has read-only access. Only upload-enabled roles can change the active dataset.")
+    else:
+        uploaded = file_upload_section()
+        if uploaded is not None:
+            prepared_upload = prepare_dataset(uploaded)
+            st.session_state["uploaded_df"] = prepared_upload
+            save_active_upload(
+                prepared_upload,
+                {
+                    "file_name": st.session_state.get("file_name", "uploaded_dataset"),
+                    "uploaded_at": pd.Timestamp.utcnow().isoformat(),
+                    "uploaded_by": (current_user() or {}).get("email", ""),
+                    "dataset_type": "uploaded",
+                },
+            )
+            load_data.clear()
+            st.success("Dataset ready. Navigate to Dashboard to view analytics.")
 
 # ══════════════════════════════════════════════════════════════════════════
 # PAGE: DATASET PROFILING (Team 1)
 # ══════════════════════════════════════════════════════════════════════════
 elif page == "Dataset Profiling":
-    if st.session_state.get("uploaded_df") is None:
+    active_df = get_active_df()
+    if active_df is None or active_df.empty:
         st.warning("Please upload a dataset first using Data Upload.")
     else:
-        dataset_profiling_section(st.session_state["uploaded_df"])
+        dataset_profiling_section(active_df)
 
 # ══════════════════════════════════════════════════════════════════════════
 # PAGE: DATA QUALITY (Team 1)
 # ══════════════════════════════════════════════════════════════════════════
 elif page == "Data Quality":
-    if st.session_state.get("uploaded_df") is None:
+    active_df = get_active_df()
+    if active_df is None or active_df.empty:
         st.warning("Please upload a dataset first using Data Upload.")
     else:
-        data_quality_section(st.session_state["uploaded_df"])
+        data_quality_section(active_df)
 
 # ══════════════════════════════════════════════════════════════════════════
 # PAGE: MEET OUR TEAM
@@ -1083,11 +1173,20 @@ elif page == "Settings":
 
     with c3:
         st.markdown('<div class="chart-card"><div class="chart-label">Data</div>', unsafe_allow_html=True)
-        if st.button("Clear Uploaded Dataset", use_container_width=True, key="clear_data"):
-            st.session_state["uploaded_df"] = None
-            load_data.clear()
-            st.success("Cleared!")
-            st.rerun()
+        if can(PERM_UPLOAD_DATA):
+            if st.button("Clear Uploaded Dataset", use_container_width=True, key="clear_data"):
+                clear_active_upload()
+                st.session_state["uploaded_df"] = None
+                if "file_name" in st.session_state:
+                    del st.session_state["file_name"]
+                load_data.clear()
+                st.success("Cleared!")
+                st.rerun()
+        else:
+            shared_meta = load_active_meta()
+            if shared_meta.get("file_name"):
+                st.caption(f"Active dataset: {shared_meta['file_name']}")
+            st.info("Read-only access: dataset upload and clear controls are disabled.")
         if st.button("Clear Chat History", use_container_width=True, key="clear_chat"):
             st.session_state.chat_messages = []
             clear_memory()

@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Dataset Profiling — Zero Click AI</title>
   <link rel="stylesheet" href="styles.css"/>
+  <!-- ── Auth + Role Guard ── -->
+  <script>
+    (function () {
+      var token  = localStorage.getItem('sales_auth_token');
+      var legacy = localStorage.getItem('isLoggedIn');
+      if (!token && legacy !== 'true') { window.location.replace('login.html'); }
+    })();
+  </script>
   <style>
     .dash-wrap { display:flex; min-height:100vh; padding-top:58px; overflow:hidden; }
     .main {
@@ -316,9 +324,18 @@
 
     document.addEventListener("DOMContentLoaded", init);
 
+    const ALLOWED_ROLES = ["Admin", "Sales Manager", "Analyst"];
+
     function init() {
       if (!window.App || !App.isAuthenticated()) { window.location.replace("login.html"); return; }
-      hydrateUser();
+      const user = App.getUser() || {};
+      const role = user.role || "Viewer";
+      if (!ALLOWED_ROLES.includes(role)) {
+        // Redirect with access-denied message
+        window.location.replace("dashboard.html?denied=profiling");
+        return;
+      }
+      hydrateUser(user, role);
       if (window.App && App.hasConfiguredBackend()) {
         loadProfile();
       } else {
@@ -326,16 +343,16 @@
       }
     }
 
-    function hydrateUser() {
-      const user = App.getUser() || {};
-      const role = user.role || "Viewer";
+    function hydrateUser(user, role) {
+      user = user || (App.getUser() || {});
+      role = role || user.role || "Viewer";
       const name = user.name || user.email || "User";
       const initials = name.split(" ").map(x => x[0]).join("").slice(0,2).toUpperCase();
       document.getElementById("navRoleBadge").textContent = role;
       document.getElementById("sbAvatar").textContent = initials;
       document.getElementById("sbUserName").textContent = name;
       document.getElementById("sbUserRole").textContent = role;
-      if (["Admin","Sales Manager"].includes(role)) {
+      if (role === "Admin") {
         document.getElementById("usersNavLink").style.display = "flex";
       }
     }
