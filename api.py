@@ -175,6 +175,22 @@ USER_DB_PATH = os.getenv("USER_DB_PATH") or os.getenv("DATABASE_URL", os.path.jo
 USER_DB_TABLE = "app_users"
 LEGACY_USERS_FILE = "users.json"
 DATA_FILE    = os.path.join("data", "SALES_DATA_SETT.csv")
+TEAM_SEED_USERS = [
+    {"name": "Naheen Kauser", "email": "naheenkauser113@gmail.com", "password": "naheenkauser113", "role": "Admin"},
+    {"name": "Dhaval Shah", "email": "d34058397@gmail.com", "password": "d34058397", "role": "Admin"},
+    {"name": "Mohammed Ammar", "email": "mohammedammar060802@gmail.com", "password": "mohammedammar060802", "role": "Admin"},
+    {"name": "Yusuf Chonche", "email": "yusufchonche0@gmail.com", "password": "yusufchonche0", "role": "Admin"},
+    {"name": "Vaishnavi Metri", "email": "vaishnavimetri234@gmail.com", "password": "vaishnavimetri234", "role": "Admin"},
+    {"name": "Anoosha Kembhavi", "email": "anooshakembhavi@gmail.com", "password": "anooshakembhavi", "role": "Admin"},
+    {"name": "Snehal Kamble", "email": "kamblesnehal578@gmail.com", "password": "kamblesnehal578", "role": "Admin"},
+    {"name": "Nazhat Naikwadi", "email": "nazhatnaikwadi@gmail.com", "password": "nazhatnaikwadi", "role": "Admin"},
+    {"name": "Keerti Gadigeppagoudar", "email": "keerti.s.g2020@gmail.com", "password": "keerti.s.g2020", "role": "Admin"},
+    {"name": "Samruddhi Patil", "email": "patilsamruddhi863@gmail.com", "password": "patilsamruddhi863", "role": "Admin"},
+]
+LEGACY_USER_DB_PATHS = [
+    os.path.join("database", "scheduler.db"),
+    os.path.join("database", "users.db"),
+]
 ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
@@ -312,6 +328,24 @@ def _seed_default_users(conn) -> None:
     )
 
 
+def _seed_team_users(conn) -> None:
+    for user in TEAM_SEED_USERS:
+        conn.execute(
+            f"""
+            INSERT OR IGNORE INTO {USER_DB_TABLE} (email, name, password_hash, role, created_at, is_active)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user["email"].lower().strip(),
+                user["name"],
+                pwd_ctx.hash(user["password"]),
+                user["role"],
+                datetime.utcnow().isoformat(),
+                1,
+            ),
+        )
+
+
 def _migrate_legacy_users(conn) -> None:
     if not os.path.exists(LEGACY_USERS_FILE):
         return
@@ -343,6 +377,50 @@ def _migrate_legacy_users(conn) -> None:
         )
 
 
+def _migrate_legacy_user_dbs(conn) -> None:
+    target_path = os.path.abspath(USER_DB_PATH)
+
+    for legacy_path in LEGACY_USER_DB_PATHS:
+        source_path = os.path.abspath(legacy_path)
+        if source_path == target_path or not os.path.exists(source_path):
+            continue
+
+        legacy_conn = sqlite3.connect(source_path)
+        legacy_conn.row_factory = sqlite3.Row
+        try:
+            has_app_users = legacy_conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                (USER_DB_TABLE,),
+            ).fetchone()
+            if not has_app_users:
+                continue
+
+            rows = legacy_conn.execute(
+                f"""
+                SELECT email, name, password_hash, role, created_at, is_active
+                FROM {USER_DB_TABLE}
+                """
+            ).fetchall()
+            for row in rows:
+                conn.execute(
+                    f"""
+                    INSERT OR IGNORE INTO {USER_DB_TABLE}
+                    (email, name, password_hash, role, created_at, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        row["email"].lower().strip(),
+                        row["name"],
+                        row["password_hash"],
+                        row["role"],
+                        row["created_at"],
+                        row["is_active"],
+                    ),
+                )
+        finally:
+            legacy_conn.close()
+
+
 def _init_user_store() -> None:
     conn = _user_db_conn()
     try:
@@ -359,7 +437,9 @@ def _init_user_store() -> None:
             """
         )
         _migrate_legacy_users(conn)
+        _migrate_legacy_user_dbs(conn)
         _seed_default_users(conn)
+        _seed_team_users(conn)
         conn.commit()
     finally:
         conn.close()
