@@ -1279,6 +1279,50 @@
       }
     }
   
+    /* ── Button state helpers for email scheduler ── */
+    function _emailBtnLoading(btnId, loadingText) {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.disabled = true;
+      btn.dataset.originalHtml = btn.innerHTML;
+      btn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+        </svg>
+        ${loadingText}`;
+    }
+
+    function _emailBtnSuccess(btnId, successText) {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.style.background = "rgba(74,222,128,0.15)";
+      btn.style.borderColor = "rgba(74,222,128,0.5)";
+      btn.style.color = "#4ADE80";
+      btn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        ${successText}`;
+      // Reset back to normal after 3 seconds
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.style.background = "";
+        btn.style.borderColor = "";
+        btn.style.color = "";
+        btn.innerHTML = btn.dataset.originalHtml || btn.innerHTML;
+      }, 3000);
+    }
+
+    function _emailBtnError(btnId) {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.disabled = false;
+      btn.style.background = "";
+      btn.style.borderColor = "";
+      btn.style.color = "";
+      btn.innerHTML = btn.dataset.originalHtml || btn.innerHTML;
+    }
+
     async function createEmailSchedule() {
       if (!window.App || !App.hasConfiguredBackend()) {
         if (App) App.showToast("Backend required.", "warn"); return;
@@ -1288,6 +1332,8 @@
       const format = val("scheduleFormat");
       const time   = val("scheduleTime") || "09:00";
       if (!email) { if (App) App.showToast("Enter recipient email.", "warn"); return; }
+
+      _emailBtnLoading("btnAddSchedule", "Creating...");
       try {
         await App.request("/api/email/schedules", {
           method: "POST",
@@ -1300,24 +1346,15 @@
             filters: getFilterParams()
           }
         });
+        _emailBtnSuccess("btnAddSchedule", "Schedule Created!");
         if (App) App.showToast("Schedule created. First report sending now.", "success");
         loadEmailSchedules();
       } catch (err) {
+        _emailBtnError("btnAddSchedule");
         if (App) App.showToast(err.message || "Could not create schedule.", "error");
       }
     }
-  
-    async function deleteSchedule(id) {
-      if (!id) return;
-      try {
-        await App.request(`/api/email/schedules/${id}`, { method: "DELETE" });
-        if (App) App.showToast("Schedule removed.", "success");
-        loadEmailSchedules();
-      } catch (err) {
-        if (App) App.showToast(err.message || "Could not remove schedule.", "error");
-      }
-    }
-  
+
     async function sendReportNow() {
       if (!window.App || !App.hasConfiguredBackend()) {
         if (App) App.showToast("Backend required.", "warn"); return;
@@ -1325,6 +1362,8 @@
       const email  = val("scheduleEmail");
       const format = val("scheduleFormat") || "excel";
       if (!email) { if (App) App.showToast("Enter recipient email first.", "warn"); return; }
+
+      _emailBtnLoading("btnSendNow", "Sending...");
       try {
         await App.request("/api/email/send-now", {
           method: "POST",
@@ -1336,12 +1375,25 @@
             filters: getFilterParams()
           }
         });
-        if (App) App.showToast("Report sending to " + email + ".", "success");
+        _emailBtnSuccess("btnSendNow", "Sent!");
+        if (App) App.showToast("Report sent to " + email + ".", "success");
       } catch (err) {
+        _emailBtnError("btnSendNow");
         if (App) App.showToast(err.message || "Could not send report.", "error");
       }
     }
-  
+
+    async function deleteSchedule(id) {
+      if (!id) return;
+      try {
+        await App.request(`/api/email/schedules/${id}`, { method: "DELETE" });
+        if (App) App.showToast("Schedule removed.", "success");
+        loadEmailSchedules();
+      } catch (err) {
+        if (App) App.showToast(err.message || "Could not remove schedule.", "error");
+      }
+    }
+
     function exportFilteredCsv() {
       const rows = state.tableRows && state.tableRows.length ? state.tableRows : state.filtered;
       if (!rows.length) { if (App) App.showToast("No filtered data to export.", "error"); return; }
