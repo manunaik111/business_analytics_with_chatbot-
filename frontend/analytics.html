@@ -239,7 +239,7 @@
             <input type="number" id="ctrlGrowth" class="ctrl-input" value="10" min="0" max="100" style="width:120px;">
           </div>
           <div class="ctrl-group" style="justify-content:flex-end;">
-            <button class="ctrl-run" onclick="runForecast()">
+            <button class="ctrl-run" id="runForecastBtn" onclick="runForecast()">
               <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 3 19 12 5 21 5 3"/></svg>
               Run Forecast
             </button>
@@ -389,23 +389,27 @@
       if (!App.hasConfiguredBackend()) return;
       const periods = parseInt(document.getElementById("ctrlPeriods").value) || 6;
       const growth  = parseFloat(document.getElementById("ctrlGrowth").value) || 10;
+      const runBtn = document.getElementById("runForecastBtn");
 
       document.getElementById("noBackendState").style.display  = "none";
       document.getElementById("analyticsContent").style.display = "none";
-      document.getElementById("loadingState").style.display     = "block";
+      document.getElementById("loadingState").style.display     = "none";
+      if (runBtn) runBtn.disabled = true;
+      if (App.showLoader) App.showLoader("Running forecast model...");
 
       try {
         const data = await App.request("/api/analytics/predict", {
           params: { forecast_periods: periods, target_growth: growth }
         });
         _lastData = data;
-        document.getElementById("loadingState").style.display    = "none";
         document.getElementById("analyticsContent").style.display = "block";
         renderForecast(data);
       } catch (err) {
-        document.getElementById("loadingState").style.display   = "none";
         document.getElementById("noBackendState").style.display = "block";
         if (App.showToast) App.showToast(err.message || "Forecast failed.", "error");
+      } finally {
+        if (App.hideLoader) App.hideLoader();
+        if (runBtn) runBtn.disabled = false;
       }
     }
 

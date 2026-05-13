@@ -267,6 +267,38 @@
         toast.remove();
       }, 4200);
     }
+
+    let loaderCount = 0;
+
+    function showLoader(message) {
+      loaderCount += 1;
+      let overlay = document.getElementById("appLoaderOverlay");
+
+      if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.id = "appLoaderOverlay";
+        overlay.className = "app-loader-overlay";
+        overlay.innerHTML = '<div class="app-loader-card"><div class="app-loader-spinner"></div><div class="app-loader-text" id="appLoaderText">Loading...</div></div>';
+        document.body.appendChild(overlay);
+      }
+
+      const text = document.getElementById("appLoaderText");
+      if (text) {
+        text.textContent = message || "Loading...";
+      }
+
+      overlay.style.display = "flex";
+    }
+
+    function hideLoader() {
+      loaderCount = Math.max(0, loaderCount - 1);
+      if (loaderCount > 0) return;
+
+      const overlay = document.getElementById("appLoaderOverlay");
+      if (overlay) {
+        overlay.style.display = "none";
+      }
+    }
   
     /* ═══════════════════════════════════════════════════════════════
        THEME TOGGLE — Dark (default) ↔ Light
@@ -366,11 +398,13 @@
       getTheme,
       getUser,
       hasConfiguredBackend,
+      hideLoader,
       isAuthenticated,
       request,
       saveDemoUsers,
       setApiBase,
       setSession,
+      showLoader,
       showToast,
       signOut,
       toggleTheme
