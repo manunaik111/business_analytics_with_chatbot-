@@ -722,8 +722,15 @@
 
   <!-- Email Scheduler Modal -->
   <div id="emailModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:500;display:none;align-items:center;justify-content:center;">
-    <div style="background:var(--glass-bg-heavy);border:1px solid var(--glass-border);border-radius:var(--r-xl);padding:28px;width:440px;max-width:calc(100vw - 40px);position:relative;box-shadow:0 32px 80px rgba(0,0,0,0.75);">
+    <div class="email-modal-card" style="background:var(--glass-bg-heavy);border:1px solid var(--glass-border);border-radius:var(--r-xl);padding:28px;width:440px;max-width:calc(100vw - 40px);position:relative;box-shadow:0 32px 80px rgba(0,0,0,0.75);">
       <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent);border-radius:var(--r-xl) var(--r-xl) 0 0;"></div>
+      <div id="emailSendOverlay" class="email-send-overlay" aria-hidden="true">
+        <div class="email-send-overlay-card">
+          <div class="email-send-overlay-spinner"></div>
+          <div class="email-send-overlay-title">Preparing Your Email</div>
+          <div class="email-send-overlay-text" id="emailSendOverlayText">Please wait while we queue your report for delivery.</div>
+        </div>
+      </div>
       <button onclick="toggleEmailModal()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:4px;line-height:1;" onmouseover="this.style.color='var(--white)'" onmouseout="this.style.color='var(--text-muted)'">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -760,11 +767,11 @@
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:20px;">
-        <button onclick="createEmailSchedule()" class="dl-btn" style="flex:1;justify-content:center;padding:9px 14px;font-size:11px;">
+        <button id="btnAddSchedule" onclick="createEmailSchedule()" class="dl-btn" style="flex:1;justify-content:center;padding:9px 14px;font-size:11px;">
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Add Schedule
         </button>
-        <button onclick="sendReportNow()" class="dl-btn-outline" style="flex:1;padding:9px 14px;font-size:11px;">
+        <button id="btnSendNow" onclick="sendReportNow()" class="dl-btn-outline" style="flex:1;padding:9px 14px;font-size:11px;">
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           Send Now
         </button>

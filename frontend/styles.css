@@ -875,6 +875,59 @@ option { background: var(--black-2); }
   font-weight: 600;
 }
 
+.email-send-overlay {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(2, 2, 4, 0.82);
+  backdrop-filter: blur(10px);
+  border-radius: var(--r-xl);
+  z-index: 3;
+}
+
+.email-send-overlay.active {
+  display: flex;
+}
+
+.email-send-overlay-card {
+  width: 100%;
+  max-width: 300px;
+  padding: 24px 22px;
+  border-radius: var(--r-lg);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(109,0,26,0.08));
+  box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+  text-align: center;
+}
+
+.email-send-overlay-spinner {
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.12);
+  border-top-color: var(--white);
+  border-right-color: var(--burgundy-lt);
+  animation: spin 0.8s linear infinite;
+}
+
+.email-send-overlay-title {
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  margin-bottom: 8px;
+}
+
+.email-send-overlay-text {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .sidebar { display: none; }

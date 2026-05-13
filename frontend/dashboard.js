@@ -1323,6 +1323,15 @@
       btn.innerHTML = btn.dataset.originalHtml || btn.innerHTML;
     }
 
+    function _toggleEmailSendOverlay(show, message) {
+      const overlay = document.getElementById("emailSendOverlay");
+      const text = document.getElementById("emailSendOverlayText");
+      if (!overlay) return;
+      if (text && message) text.textContent = message;
+      overlay.classList.toggle("active", !!show);
+      overlay.setAttribute("aria-hidden", show ? "false" : "true");
+    }
+
     async function createEmailSchedule() {
       if (!window.App || !App.hasConfiguredBackend()) {
         if (App) App.showToast("Backend required.", "warn"); return;
@@ -1363,9 +1372,10 @@
       const format = val("scheduleFormat") || "excel";
       if (!email) { if (App) App.showToast("Enter recipient email first.", "warn"); return; }
 
-      _emailBtnLoading("btnSendNow", "Sending...");
+      _emailBtnLoading("btnSendNow", "Queueing...");
+      _toggleEmailSendOverlay(true, "Please wait while we queue your report for delivery.");
       try {
-        await App.request("/api/email/send-now", {
+        const response = await App.request("/api/email/send-now", {
           method: "POST",
           body: {
             recipient_email: email,
@@ -1375,9 +1385,14 @@
             filters: getFilterParams()
           }
         });
-        _emailBtnSuccess("btnSendNow", "Sent!");
-        if (App) App.showToast("Report sent to " + email + ".", "success");
+        _toggleEmailSendOverlay(false);
+        _emailBtnSuccess("btnSendNow", "Queued!");
+        if (App) App.showToast(
+          (response && response.message) || "Your report has been queued successfully and will be sent shortly. Please check your inbox to confirm delivery.",
+          "success"
+        );
       } catch (err) {
+        _toggleEmailSendOverlay(false);
         _emailBtnError("btnSendNow");
         if (App) App.showToast(err.message || "Could not send report.", "error");
       }

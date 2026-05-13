@@ -20,7 +20,7 @@ Files used:
   email_scheduler/db_manager.py   → DatabaseManager
 """
 
-import os, io, json, asyncio, uuid, sys, sqlite3
+import os, io, json, asyncio, uuid, sys, sqlite3, logging
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Optional
@@ -166,6 +166,8 @@ except Exception:
     HAS_SCHEDULER = False
     _email_db = None
     _scheduler = None
+
+logger = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SECRET_KEY   = os.getenv("JWT_SECRET", "genesis-secret-key-change-in-prod")
@@ -2672,7 +2674,7 @@ def delete_schedule(schedule_id: int, _user: dict = Depends(get_current_user)):
     _email_db.delete_schedule(schedule_id)
     return {"message": f"Schedule #{schedule_id} deleted."}
 
-@app.post("/api/email/send-now")
+@app.post("/api/email/send-now", status_code=202)
 def send_now(
     req: EmailScheduleRequest,
     background_tasks: BackgroundTasks,
@@ -2691,11 +2693,31 @@ def send_now(
             "created_by":    _user.get("sub","")
         }
         sid = _email_db.save_schedule(schedule_data)
-        trigger_result = _scheduler.trigger_now(sid, df=_get_df(_user))
-        _email_db.delete_schedule(sid)
-        if trigger_result.get("success"):
-            return {"message": f"Report sent to {req.recipient_email}.", "trigger": trigger_result}
-        raise HTTPException(500, f"Email send failed: {trigger_result.get('error', 'Unknown error')}")
+        user_df = _get_df(_user)
+
+        def _send_queued_report(schedule_id: int, df):
+            try:
+                trigger_result = _scheduler.trigger_now(schedule_id, df=df)
+                if not trigger_result.get("success"):
+                    logger.error(
+                        "Queued email send failed for schedule %s: %s",
+                        schedule_id,
+                        trigger_result.get("error", "Unknown error")
+                    )
+            except Exception:
+                logger.exception("Queued email send crashed for schedule %s", schedule_id)
+            finally:
+                try:
+                    _email_db.delete_schedule(schedule_id)
+                except Exception:
+                    logger.exception("Could not clean up queued schedule %s", schedule_id)
+
+        background_tasks.add_task(_send_queued_report, sid, user_df)
+        return {
+            "message": f"Your report has been queued successfully and will be sent shortly to {req.recipient_email}. Please check your inbox to confirm delivery.",
+            "queued": True,
+            "schedule_id": sid,
+        }
     except Exception as e:
         raise HTTPException(500, f"Send error: {e}")
 
