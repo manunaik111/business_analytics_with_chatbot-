@@ -731,6 +731,20 @@
           <div class="email-send-overlay-text" id="emailSendOverlayText">Please wait while we queue your report for delivery.</div>
         </div>
       </div>
+      <div id="emailQueuedPopup" class="email-queued-popup" aria-hidden="true">
+        <div class="email-queued-popup-card" role="status" aria-live="polite">
+          <div class="email-queued-popup-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 2 11 13"></path>
+              <path d="m22 2-7 20-4-9-9-4Z"></path>
+            </svg>
+          </div>
+          <div class="email-queued-popup-title">Email queued successfully</div>
+          <div class="email-queued-popup-text" id="emailQueuedPopupText">Your report is in the sending queue and will be delivered shortly.</div>
+          <div class="email-queued-popup-recipient" id="emailQueuedPopupRecipient">recipient@company.com</div>
+          <button type="button" class="email-queued-popup-btn" onclick="closeEmailQueuedPopup()">Okay, understood</button>
+        </div>
+      </div>
       <button onclick="toggleEmailModal()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:4px;line-height:1;" onmouseover="this.style.color='var(--white)'" onmouseout="this.style.color='var(--text-muted)'">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>

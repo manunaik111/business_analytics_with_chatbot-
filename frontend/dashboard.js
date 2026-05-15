@@ -1228,10 +1228,50 @@
     /* ═══════════════════════════════════════════════════════════════════════
        EMAIL SCHEDULER MODAL
     ═══════════════════════════════════════════════════════════════════════ */
+    let emailQueuedPopupTimer = null;
+
+    function _toggleEmailQueuedPopup(show, options = {}) {
+      const popup = document.getElementById("emailQueuedPopup");
+      const text = document.getElementById("emailQueuedPopupText");
+      const recipient = document.getElementById("emailQueuedPopupRecipient");
+      if (!popup) return;
+
+      if (emailQueuedPopupTimer) {
+        clearTimeout(emailQueuedPopupTimer);
+        emailQueuedPopupTimer = null;
+      }
+
+      if (show) {
+        if (text) {
+          text.textContent = options.message || "Your report is in the sending queue and will be delivered shortly.";
+        }
+        if (recipient) {
+          recipient.textContent = options.recipient || "Recipient email not available";
+        }
+      }
+
+      popup.classList.toggle("active", !!show);
+      popup.setAttribute("aria-hidden", show ? "false" : "true");
+
+      if (show && options.autoClose !== false) {
+        emailQueuedPopupTimer = setTimeout(() => {
+          _toggleEmailQueuedPopup(false);
+        }, options.timeout || 4500);
+      }
+    }
+
+    function closeEmailQueuedPopup() {
+      _toggleEmailQueuedPopup(false);
+    }
+
     function toggleEmailModal() {
       const modal = document.getElementById("emailModal");
       if (!modal) return;
       const isOpen = modal.classList.toggle("open");
+      if (!isOpen) {
+        _toggleEmailSendOverlay(false);
+        _toggleEmailQueuedPopup(false);
+      }
       if (isOpen) {
         loadEmailStatus();
         loadEmailSchedules();
@@ -1387,6 +1427,10 @@
         });
         _toggleEmailSendOverlay(false);
         _emailBtnSuccess("btnSendNow", "Queued!");
+        _toggleEmailQueuedPopup(true, {
+          recipient: email,
+          message: (response && response.message) || "Your report has been queued successfully and will be sent shortly."
+        });
         if (App) App.showToast(
           (response && response.message) || "Your report has been queued successfully and will be sent shortly. Please check your inbox to confirm delivery.",
           "success"
