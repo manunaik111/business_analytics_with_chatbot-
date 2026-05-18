@@ -198,8 +198,7 @@ def _top_items(df, ct, n=16):
         tot = out[sc].sum()
         out["Profit Rank %"] = (out[sc] / tot * 100).round(1)
     out.insert(0, "Rank", range(1, len(out)+1))
-    # Use actual column names from the dataframe (sc/pc), not hardcoded strings
-    cols = ["Rank", item, sc] + ([pc, "Profit Rank %"] if pc else [])
+    cols = ["Rank", item, "Sales"] + ([pc, "Profit Rank %"] if pc else [])
     out = out[cols]
     out.columns = ["Rank", "Item", "Sales"] + (["Profit", "Profit Rank %"] if pc else [])
     return out.round(2)
