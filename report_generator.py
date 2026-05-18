@@ -1,50 +1,47 @@
 """
-report_generator.py — PDF + Excel reports matching the reference design image.
-Uses ReportLab (PDF) + Matplotlib (charts) + OpenPyXL (Excel).
+report_generator.py — Professional PDF + Excel Reports
+=======================================================
+PDF Layout (4–5 pages):
+  Page 1 : Executive Dashboard  — KPI cards + AI summary
+  Page 2 : Visual Analytics     — 6 polished charts in 2-col grid
+  Page 3 : Top Items table      + AI insights (two-column layout)
+  Page 4 : Dataset Sample       — styled first-20-rows preview
+  Page 5 : Forecast             — only rendered when forecast data exists
+  ML page : only rendered when ml_results is populated
 
-Reference design features:
-  Page 1 : Purple header bar + sub-bar | PERFORMANCE DASHBOARD title |
-            6 KPI boxes (2 rows × 3) in multi-colors | AI NARRATED SUMMARY |
-            footnote + page stamp
-  Page 2 : 6 charts in 2-col grid — Sales by Region (h-bar, cyan),
-            Sales by Category (donut, purple), Monthly Sales Trend (area, green),
-            Sales vs Profit (scatter, orange), Monthly Orders Trend (bar, blue),
-            Seasonality Heatmap (purple gradient)
-  Page 3 : Top-16 Products table (purple header, alternating rows, profit green/red)
-  Page 4 : ML Insights (icons, green metrics)
-  Page 5 : Forecast table (if available)
-  Page 6 : Full AI Insights text
-  Page 7 : Dataset Sample — first 20 rows
-
-Each chart uses a DIFFERENT accent colour to match the reference visual variety.
+Design improvements:
+  - Consistent deep-violet + teal brand palette
+  - Category chart fixed: horizontal bar (no broken donut)
+  - Rolling-average overlay on order volume chart
+  - Peak-cell highlight on heatmap
+  - Two-column layout on page 3 (table + insights side-by-side)
+  - Auto-filter + freeze panes on Excel sheets
+  - Column detection works on any dataset (Reliance, Zomato, etc.)
 """
 
-import io, os, datetime, warnings
+import io, datetime, warnings
 import numpy as np
 import pandas as pd
-
 warnings.filterwarnings("ignore")
 
-# ── matplotlib ─────────────────────────────────────────────────────────────────
+# ── matplotlib ────────────────────────────────────────────────────────────────
 try:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import matplotlib.ticker as mticker
-    import matplotlib.patches as mpatches
-    from matplotlib.patches import FancyBboxPatch
     HAS_MPL = True
 except ImportError:
     HAS_MPL = False
 
-# ── ReportLab ──────────────────────────────────────────────────────────────────
+# ── ReportLab ─────────────────────────────────────────────────────────────────
 try:
     from reportlab.lib.pagesizes import A4
     from reportlab.platypus import (
         SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
-        Image as RLImage, HRFlowable, PageBreak, KeepTogether,
+        Image as RLImage, HRFlowable, PageBreak,
     )
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib import colors
     from reportlab.lib.units import mm
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
@@ -52,13 +49,12 @@ try:
 except ImportError:
     HAS_RL = False
 
-# ── OpenPyXL ───────────────────────────────────────────────────────────────────
+# ── OpenPyXL ──────────────────────────────────────────────────────────────────
 try:
     import openpyxl
-    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side, GradientFill
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
     from openpyxl.chart import BarChart, LineChart, PieChart, Reference
-    from openpyxl.chart.series import DataPoint
     HAS_OXL = True
 except ImportError:
     HAS_OXL = False
@@ -66,44 +62,53 @@ except ImportError:
 NOW = datetime.datetime.now()
 
 # ════════════════════════════════════════════════════════════════════════════════
-# COLOUR PALETTE  (reference image uses vibrant, mixed colours)
+# DESIGN SYSTEM
 # ════════════════════════════════════════════════════════════════════════════════
-C = {
-    # Chart accent colours (each chart gets its own)
-    "region":    "#00C9B1",   # teal/cyan
-    "category":  "#7C3AED",   # purple
-    "trend":     "#22C55E",   # green
-    "scatter":   "#F97316",   # orange
-    "orders":    "#3B82F6",   # blue
-    "heatmap":   "#7C3AED",   # purple
-    # Table header
-    "hdr":       "#7C3AED",
-    "hdr2":      "#5B21B6",
-    # KPI box colours (6 different)
-    "kpi0": "#06B6D4",   # cyan
-    "kpi1": "#22C55E",   # green
-    "kpi2": "#3B82F6",   # blue
-    "kpi3": "#8B5CF6",   # violet
-    "kpi4": "#F59E0B",   # amber
-    "kpi5": "#EF4444",   # red (negative demo)
-    # UI
-    "purple_dark":  "#7C3AED",
-    "purple_mid":   "#A78BFA",
-    "purple_light": "#EDE9FE",
-    "white":        "#FFFFFF",
-    "grey":         "#6B7280",
-    "bg_alt":       "#F3F0FF",
-    "bg_white":     "#FFFFFF",
-    "green_pos":    "#16A34A",
-    "red_neg":      "#DC2626",
-    "row_even":     "#F9F7FF",
-    "row_odd":      "#FFFFFF",
+BRAND = {
+    "deep":    "#4C1D95",
+    "mid":     "#7C3AED",
+    "soft":    "#A78BFA",
+    "pale":    "#EDE9FE",
+    "teal":    "#0D9488",
+    "teal_lt": "#CCFBF1",
+    "ink":     "#1E1B4B",
+    "muted":   "#6B7280",
+    "rule":    "#DDD6FE",
+    "white":   "#FFFFFF",
+    "offwhite":"#FAFAF9",
+    "green":   "#16A34A",
+    "red":     "#DC2626",
+    "row_a":   "#F5F3FF",
+    "row_b":   "#FFFFFF",
 }
 
-if HAS_RL:
-    def _rc(hex_): return colors.HexColor(hex_)
-    RL = {k: _rc(v) for k, v in C.items()}
+CHART_PALETTE = {
+    "region":   "#0D9488",
+    "category": "#7C3AED",
+    "trend":    "#059669",
+    "scatter":  "#EA580C",
+    "orders":   "#2563EB",
+    "heatmap":  "#7C3AED",
+}
 
+KPI_CARDS = [
+    ("#ECFDF5", "#059669"),
+    ("#EFF6FF", "#2563EB"),
+    ("#F5F3FF", "#7C3AED"),
+    ("#FFF7ED", "#EA580C"),
+    ("#F0FDF4", "#16A34A"),
+    ("#FEF2F2", "#DC2626"),
+]
+
+XL_ACCENTS = {
+    "README":             "4C1D95",
+    "KPIs":               "0D9488",
+    "Sales_by_Region":    "0369A1",
+    "Sales_by_Category":  "7C3AED",
+    "Top_Products":       "B45309",
+    "Monthly_Trend":      "047857",
+    "Raw_Data":           "374151",
+}
 
 # ════════════════════════════════════════════════════════════════════════════════
 # DATA HELPERS
@@ -111,486 +116,468 @@ if HAS_RL:
 def _col_types(df):
     return {
         "numeric":     df.select_dtypes(include="number").columns.tolist(),
-        "categorical": df.select_dtypes(include=["object", "category"]).columns.tolist(),
-        "datetime":    df.select_dtypes(include=["datetime64", "datetimetz"]).columns.tolist(),
+        "categorical": df.select_dtypes(include=["object","category"]).columns.tolist(),
+        "datetime":    df.select_dtypes(include=["datetime64","datetimetz"]).columns.tolist(),
     }
 
-def _s(df, ct):
-    return next((c for c in ct["numeric"] if any(w in c.lower() for w in ["sales","revenue","amount","total"])),
-                ct["numeric"][0] if ct["numeric"] else None)
+def _sales_col(df, ct):
+    for kw in ["total revenue","revenue","sales","amount","total"]:
+        c = next((c for c in ct["numeric"] if kw in c.lower()), None)
+        if c: return c
+    return ct["numeric"][0] if ct["numeric"] else None
 
-def _p(df, ct):
-    return next((c for c in ct["numeric"] if "profit" in c.lower()), None)
+def _profit_col(df, ct):
+    return next((c for c in ct["numeric"]
+                 if "profit" in c.lower() and "margin" not in c.lower()), None)
 
-def _cat(df, ct):
-    return next((c for c in ct["categorical"]
-                 if any(w in c.lower() for w in ["categ","type","segment","product"])), None)
+def _cat_col(df, ct):
+    for kw in ["categ","type","segment","cuisine","food_type"]:
+        c = next((c for c in ct["categorical"] if kw in c.lower()), None)
+        if c: return c
+    for c in ct["categorical"]:
+        if df[c].nunique() <= 30 and not any(x in c.lower() for x in ["id","name","order","customer"]):
+            return c
+    return None
 
-def _reg(df, ct):
+def _item_col(df, ct):
+    for exact in ["product name","food item","item name","sku name"]:
+        c = next((c for c in df.columns if c.lower() == exact), None)
+        if c: return c
+    for kw in ["product","food","item","sku"]:
+        c = next((c for c in ct["categorical"] if kw in c.lower()), None)
+        if c: return c
+    return None
+
+def _reg_col(df, ct):
     return next((c for c in df.columns if "region" in c.lower()), None)
 
-def _group_label(col, fallback):
-    return col if col else fallback
+def _date_col(df, ct):
+    dcs = ct.get("datetime", [])
+    if dcs: return dcs[0]
+    for c in df.columns:
+        if "date" in c.lower(): return c
+    return None
 
-def _metric_label(df, ct):
-    return _s(df, ct) or "Value"
+def _fmt(v):
+    try:
+        v = float(v)
+        if abs(v) >= 1e9: return f"${v/1e9:.2f}B"
+        if abs(v) >= 1e6: return f"${v/1e6:.2f}M"
+        if abs(v) >= 1e3: return f"${v/1e3:.1f}K"
+        return f"${v:,.0f}"
+    except: return str(v)
 
 def _num(x):
     try: return float(x)
     except: return 0.0
 
-def _fmt(v):
-    """Format a number for display: $1.23M, $456K, $123"""
-    try:
-        v = float(v)
-        if abs(v) >= 1e6:  return f"${v/1e6:.2f}M"
-        if abs(v) >= 1e3:  return f"${v/1e3:.1f}K"
-        return f"${v:,.0f}"
-    except: return str(v)
-
-def sales_by_region(df, ct):
-    rc, sc = _reg(df, ct), _s(df, ct)
-    if not rc or not sc:
-        return pd.DataFrame({"Region": ["N/A"], "Sales": [0]})
-    out = df.groupby(rc)[sc].sum().reset_index().sort_values(sc, ascending=False)
+def _sales_by_region(df, ct):
+    rc, sc = _reg_col(df, ct), _sales_col(df, ct)
+    if not rc or not sc: return pd.DataFrame({"Region": ["N/A"], "Sales": [0]})
+    out = df.groupby(rc)[sc].sum().reset_index().sort_values(sc, ascending=True)
     out.columns = ["Region", "Sales"]
     return out.round(2)
 
-def sales_by_category(df, ct):
-    cc, sc = _cat(df, ct), _s(df, ct)
-    if not cc or not sc:
-        return pd.DataFrame({"Category": ["N/A"], "Sales": [0], "Share %": [100]})
-    out = df.groupby(cc)[sc].sum().reset_index().sort_values(sc, ascending=False)
+def _sales_by_category(df, ct):
+    cc, sc = _cat_col(df, ct), _sales_col(df, ct)
+    if not cc or not sc: return pd.DataFrame({"Category": ["N/A"], "Sales": [0], "Pct": [100]})
+    out = df.groupby(cc)[sc].sum().reset_index().sort_values(sc, ascending=True)
     out.columns = ["Category", "Sales"]
     tot = out["Sales"].sum()
-    out["Share %"] = (out["Sales"] / tot * 100).round(1) if tot else 0
+    out["Pct"] = (out["Sales"] / tot * 100).round(1) if tot else 0
     return out.round(2)
 
-def top_products(df, ct, n=16):
-    prod = next((c for c in df.columns if "product" in c.lower() and "name" in c.lower()), None)
-    if not prod: prod = next((c for c in ct["categorical"] if "product" in c.lower()), None)
-    sc, pc = _s(df, ct), _p(df, ct)
-    if not prod or not sc:
-        return pd.DataFrame({"Product": ["N/A"], "Sales": [0]})
+def _top_items(df, ct, n=16):
+    item = _item_col(df, ct) or _cat_col(df, ct)
+    sc, pc = _sales_col(df, ct), _profit_col(df, ct)
+    if not item or not sc: return pd.DataFrame({"Item": ["N/A"], "Sales": [0]})
     gcols = [sc] + ([pc] if pc else [])
-    out = (df.groupby(prod)[gcols].sum().reset_index()
+    out = (df.groupby(item)[gcols].sum().reset_index()
              .sort_values(sc, ascending=False).head(n))
     if pc:
         tot = out[sc].sum()
         out["Profit Rank %"] = (out[sc] / tot * 100).round(1)
-    out.insert(0, "Rank", range(1, len(out) + 1))
-    out.columns = (["Rank", "Product", "Sales"] +
-                   (["Profit", "Profit Rank %"] if pc else []))
+    out.insert(0, "Rank", range(1, len(out)+1))
+    # Use actual column names from the dataframe (sc/pc), not hardcoded strings
+    cols = ["Rank", item, sc] + ([pc, "Profit Rank %"] if pc else [])
+    out = out[cols]
+    out.columns = ["Rank", "Item", "Sales"] + (["Profit", "Profit Rank %"] if pc else [])
     return out.round(2)
 
-def monthly_trend(df, ct):
-    dcs = ct.get("datetime", [])
-    sc = _s(df, ct)
-    if not dcs or not sc:
-        return pd.DataFrame({"Date": [], "Sales": [], "MoM Growth": []})
-    dc = dcs[0]
+def _monthly_trend(df, ct):
+    dc, sc = _date_col(df, ct), _sales_col(df, ct)
+    if not dc or not sc: return pd.DataFrame({"Date": [], "Sales": [], "MoM": []})
     tmp = df.copy()
     tmp[dc] = pd.to_datetime(tmp[dc], errors="coerce")
     tmp["_p"] = tmp[dc].dt.to_period("M").dt.to_timestamp()
     m = tmp.groupby("_p")[sc].sum().reset_index()
     m.columns = ["Date", "Sales"]
-    m["MoM Growth"] = m["Sales"].pct_change().fillna(0).round(4)
+    m["MoM"] = m["Sales"].pct_change().fillna(0).round(4)
     return m.round(2)
 
-
 # ════════════════════════════════════════════════════════════════════════════════
-# MATPLOTLIB CHARTS  — each with its own accent colour
+# CHART FUNCTIONS
 # ════════════════════════════════════════════════════════════════════════════════
-def _fig_bytes(fig):
+def _save(fig):
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight",
+    fig.savefig(buf, format="png", dpi=160, bbox_inches="tight",
                 facecolor="white", edgecolor="none")
     buf.seek(0)
     plt.close(fig)
     return buf
 
-def _style_ax(ax):
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.spines[["left", "bottom"]].set_color("#E5E7EB")
-    ax.tick_params(colors="#6B7280", labelsize=7)
+def _base_ax(ax, grid_axis="x"):
+    ax.spines[["top","right"]].set_visible(False)
+    ax.spines[["left","bottom"]].set_color("#E5E7EB")
+    ax.tick_params(colors="#6B7280", labelsize=7.5)
     ax.set_facecolor("#FAFAFA")
+    if grid_axis == "x":
+        ax.xaxis.grid(True, color="#F3F4F6", linewidth=0.6, zorder=0)
+        ax.yaxis.grid(False)
+    else:
+        ax.yaxis.grid(True, color="#F3F4F6", linewidth=0.6, zorder=0)
+        ax.xaxis.grid(False)
+    ax.set_axisbelow(True)
+
+def _chart_title(ax, text, color):
+    ax.set_title(text, fontsize=9.5, fontweight="bold", color=color, pad=9, loc="left")
 
 def chart_region(df, ct):
-    rbr = sales_by_region(df, ct)
-    if rbr.empty or rbr["Sales"].sum() == 0: return None
-    region_label = _group_label(_reg(df, ct), "Region")
-    metric_label = _metric_label(df, ct)
-    fig, ax = plt.subplots(figsize=(5.2, 2.8))
-    n = len(rbr)
-    # Gradient of teals
-    palette = ["#00C9B1", "#00A896", "#007F6E", "#005F52", "#004845"][:n]
-    bars = ax.barh(rbr["Region"].astype(str), rbr["Sales"],
-                   color=palette[:n], edgecolor="white", linewidth=0.5, height=0.6)
-    # Value labels
+    data = _sales_by_region(df, ct)
+    if data.empty or data["Sales"].sum() == 0: return None
+    fig, ax = plt.subplots(figsize=(5.4, 2.9))
+    fig.patch.set_facecolor("white")
+    color = CHART_PALETTE["region"]
+    n = len(data)
+    alphas = np.linspace(0.5, 1.0, n)
+    bars = ax.barh(data["Region"].astype(str), data["Sales"],
+                   color=color, edgecolor="white", linewidth=0.8,
+                   height=0.55, zorder=3)
+    for bar, a in zip(bars, alphas):
+        bar.set_alpha(a)
     for bar in bars:
         w = bar.get_width()
-        ax.text(w * 1.01, bar.get_y() + bar.get_height()/2,
-                _fmt(w), va="center", ha="left", fontsize=6.5, color="#374151")
-    ax.set_title(f"{metric_label} by {region_label}", fontsize=10, fontweight="bold",
-                 color="#00897B", pad=8, loc="left")
+        ax.text(w * 0.97, bar.get_y() + bar.get_height()/2,
+                _fmt(w), va="center", ha="right", fontsize=7,
+                color="white", fontweight="bold")
+    _chart_title(ax, f"{_sales_col(df,ct) or 'Sales'} by Region", color)
     ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: _fmt(x)))
-    _style_ax(ax)
-    fig.patch.set_facecolor("white")
-    plt.tight_layout(pad=0.5)
-    return _fig_bytes(fig)
+    _base_ax(ax, "x")
+    plt.tight_layout(pad=0.6)
+    return _save(fig)
 
 def chart_category(df, ct):
-    sbc = sales_by_category(df, ct)
-    if sbc.empty or sbc["Sales"].sum() == 0: return None
-    category_label = _group_label(_cat(df, ct), "Category")
-    metric_label = _metric_label(df, ct)
-
-    # ── Cap at top 8 slices; group the rest as "Others" ─────────────────────
-    MAX_SLICES = 8
-    if len(sbc) > MAX_SLICES:
-        top   = sbc.head(MAX_SLICES).copy()
-        other_sales = sbc.iloc[MAX_SLICES:]["Sales"].sum()
-        other_share = sbc.iloc[MAX_SLICES:]["Share %"].sum()
-        others = pd.DataFrame({"Category": ["Others"],
-                               "Sales":    [round(other_sales, 2)],
-                               "Share %":  [round(other_share, 1)]})
-        sbc = pd.concat([top, others], ignore_index=True)
-
-    n = len(sbc)
-
-    # ── Figure: taller to give room for legend below ─────────────────────────
-    fig, ax = plt.subplots(figsize=(5.6, 3.4))
+    """Horizontal bar chart — readable for any number of categories."""
+    data = _sales_by_category(df, ct)
+    if data.empty or data["Sales"].sum() == 0: return None
+    fig, ax = plt.subplots(figsize=(5.4, 2.9))
     fig.patch.set_facecolor("white")
-
-    palette = plt.cm.tab10.colors[:n] if n > 8 else plt.cm.Purples(
-        np.linspace(0.35, 0.90, n))
-
-    wedges, texts, autotexts = ax.pie(
-        sbc["Sales"],
-        autopct=lambda p: f"{p:.1f}%" if p >= 3 else "",   # hide tiny % labels
-        startangle=140,
-        colors=palette,
-        wedgeprops=dict(width=0.55, edgecolor="white", linewidth=1.8),
-        pctdistance=0.75,
-        labeldistance=None,  # suppress outer labels — use legend instead
-    )
-    for a in autotexts:
-        a.set_fontsize(6.5)
-        a.set_color("white")
-        a.set_fontweight("bold")
-
-    ax.set_title(f"{metric_label} by {category_label}", fontsize=10, fontweight="bold",
-                 color="#7C3AED", pad=6, loc="left")
-
-    # ── Legend outside the donut, below ──────────────────────────────────────
-    legend_labels = [
-        f"{row['Category'][:16]}  ({row['Share %']:.1f}%)"
-        for _, row in sbc.iterrows()
-    ]
-    ax.legend(
-        wedges, legend_labels,
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.05),
-        ncol=min(3, n),
-        fontsize=6.5,
-        frameon=False,
-        handlelength=1.0,
-        handleheight=0.8,
-        columnspacing=0.8,
-    )
-
-    plt.tight_layout(pad=0.3)
-    return _fig_bytes(fig)
+    n = len(data)
+    # Purple gradient from light to deep
+    purples = plt.cm.get_cmap("RdPu", n + 3)
+    clrs = [purples(i + 2) for i in range(n)]
+    bars = ax.barh(data["Category"].astype(str), data["Sales"],
+                   color=clrs, edgecolor="white", linewidth=0.8,
+                   height=0.55, zorder=3)
+    max_val = data["Sales"].max()
+    for bar, pct in zip(bars, data["Pct"]):
+        w = bar.get_width()
+        # Pct label to the right of bar
+        ax.text(max_val * 1.02, bar.get_y() + bar.get_height()/2,
+                f"{pct:.1f}%", va="center", ha="left", fontsize=7, color="#6B7280")
+    ax.set_xlim(0, max_val * 1.20)
+    _chart_title(ax, f"Sales by {_cat_col(df,ct) or 'Category'}", CHART_PALETTE["category"])
+    ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: _fmt(x)))
+    _base_ax(ax, "x")
+    plt.tight_layout(pad=0.6)
+    return _save(fig)
 
 def chart_trend(df, ct):
-    mt = monthly_trend(df, ct)
+    mt = _monthly_trend(df, ct)
     if mt.empty: return None
-    metric_label = _metric_label(df, ct)
-    fig, ax = plt.subplots(figsize=(5.2, 2.8))
-    x = range(len(mt))
-    ax.fill_between(x, mt["Sales"], alpha=0.18, color="#22C55E")
-    ax.plot(x, mt["Sales"], color="#22C55E", linewidth=2,
-            marker="o", markersize=4, markerfacecolor="white",
-            markeredgecolor="#22C55E", markeredgewidth=1.5)
-    ax.set_title(f"Monthly {metric_label} Trend", fontsize=10, fontweight="bold",
-                 color="#15803D", pad=8, loc="left")
-    ax.set_ylabel(metric_label, fontsize=7, color="#6B7280")
-    lbls = [str(d)[:7] for d in mt["Date"]]
-    step = max(1, len(lbls) // 6)
-    ax.set_xticks(range(0, len(lbls), step))
-    ax.set_xticklabels([lbls[i] for i in range(0, len(lbls), step)], rotation=30, fontsize=6)
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: _fmt(x)))
-    _style_ax(ax)
+    sc = _sales_col(df, ct) or "Sales"
+    color = CHART_PALETTE["trend"]
+    fig, ax = plt.subplots(figsize=(5.4, 2.9))
     fig.patch.set_facecolor("white")
-    plt.tight_layout(pad=0.5)
-    return _fig_bytes(fig)
+    x = range(len(mt))
+    ax.fill_between(x, mt["Sales"], alpha=0.15, color=color, zorder=2)
+    ax.plot(x, mt["Sales"], color=color, linewidth=2.0, zorder=3,
+            marker="o", markersize=3.5, markerfacecolor="white",
+            markeredgecolor=color, markeredgewidth=1.5)
+    # Star on peak
+    peak_idx = mt["Sales"].idxmax()
+    ax.plot(peak_idx, mt.loc[peak_idx, "Sales"],
+            marker="*", markersize=11, color="#FBBF24", zorder=4)
+    _chart_title(ax, f"Monthly {sc} Trend", color)
+    lbls = [str(d)[:7] for d in mt["Date"]]
+    step = max(1, len(lbls) // 7)
+    ax.set_xticks(range(0, len(lbls), step))
+    ax.set_xticklabels([lbls[i] for i in range(0, len(lbls), step)], rotation=30, fontsize=6.5)
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: _fmt(x)))
+    _base_ax(ax, "y")
+    plt.tight_layout(pad=0.6)
+    return _save(fig)
 
 def chart_scatter(df, ct):
-    sc, pc = _s(df, ct), _p(df, ct)
+    sc, pc = _sales_col(df, ct), _profit_col(df, ct)
     if not sc or not pc: return None
-    samp = df[[sc, pc]].dropna().sample(min(400, len(df)), random_state=42)
-    fig, ax = plt.subplots(figsize=(5.2, 2.8))
-    ax.scatter(samp[sc], samp[pc], alpha=0.55, color="#F97316",
-               s=20, edgecolors="white", linewidths=0.4)
-    # Trend line
+    samp = df[[sc, pc]].dropna().sample(min(500, len(df)), random_state=42)
+    color = CHART_PALETTE["scatter"]
+    fig, ax = plt.subplots(figsize=(5.4, 2.9))
+    fig.patch.set_facecolor("white")
+    ax.scatter(samp[sc], samp[pc], alpha=0.45, color=color, s=16,
+               edgecolors="white", linewidths=0.3, zorder=3)
     try:
         z = np.polyfit(samp[sc], samp[pc], 1)
-        p = np.poly1d(z)
-        xs = np.linspace(samp[sc].min(), samp[sc].max(), 100)
-        ax.plot(xs, p(xs), color="#F97316", linewidth=1.5, alpha=0.6, linestyle="--")
+        xs = np.linspace(samp[sc].min(), samp[sc].max(), 200)
+        ax.plot(xs, np.poly1d(z)(xs), color=color, lw=1.8, alpha=0.7,
+                linestyle="--", zorder=4)
     except: pass
-    ax.set_title(f"{sc} vs {pc}", fontsize=10, fontweight="bold",
-                 color="#C2410C", pad=8, loc="left")
+    _chart_title(ax, f"{sc} vs {pc}", color)
     ax.set_xlabel(sc, fontsize=7, color="#6B7280")
     ax.set_ylabel(pc, fontsize=7, color="#6B7280")
     ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: _fmt(x)))
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: _fmt(x)))
-    _style_ax(ax)
-    fig.patch.set_facecolor("white")
-    plt.tight_layout(pad=0.5)
-    return _fig_bytes(fig)
+    _base_ax(ax, "y")
+    plt.tight_layout(pad=0.6)
+    return _save(fig)
 
 def chart_orders(df, ct):
-    dcs = ct.get("datetime", [])
-    if not dcs: return None
-    dc = dcs[0]
+    dc = _date_col(df, ct)
+    if not dc: return None
+    color = CHART_PALETTE["orders"]
     tmp = df.copy()
     tmp[dc] = pd.to_datetime(tmp[dc], errors="coerce")
     tmp["_p"] = tmp[dc].dt.to_period("M").dt.to_timestamp()
     counts = tmp.groupby("_p").size().reset_index(name="Orders")
     if counts.empty: return None
-    fig, ax = plt.subplots(figsize=(5.2, 2.8))
-    blues = ["#93C5FD" if i % 2 == 0 else "#3B82F6" for i in range(len(counts))]
-    ax.bar(range(len(counts)), counts["Orders"],
-           color=blues, edgecolor="white", linewidth=0.5, width=0.7)
-    ax.set_title("Monthly Record Count Trend", fontsize=10, fontweight="bold",
-                 color="#1D4ED8", pad=8, loc="left")
-    ax.set_ylabel("Records", fontsize=7, color="#6B7280")
-    lbls = [str(d)[:7] for d in counts["_p"]]
-    step = max(1, len(lbls) // 6)
-    ax.set_xticks(range(0, len(lbls), step))
-    ax.set_xticklabels([lbls[i] for i in range(0, len(lbls), step)], rotation=30, fontsize=6)
-    _style_ax(ax)
+    fig, ax = plt.subplots(figsize=(5.4, 2.9))
     fig.patch.set_facecolor("white")
-    plt.tight_layout(pad=0.5)
-    return _fig_bytes(fig)
+    x = range(len(counts))
+    ax.bar(x, counts["Orders"], color=color, alpha=0.82,
+           edgecolor="white", linewidth=0.5, width=0.72, zorder=3)
+    if len(counts) >= 3:
+        roll = counts["Orders"].rolling(3, center=True).mean()
+        ax.plot(x, roll, color="#FBBF24", linewidth=2, zorder=4,
+                linestyle="-", label="3-mo avg")
+        ax.legend(fontsize=6.5, frameon=False, loc="upper left")
+    _chart_title(ax, "Monthly Order Volume", color)
+    lbls = [str(d)[:7] for d in counts["_p"]]
+    step = max(1, len(lbls) // 7)
+    ax.set_xticks(range(0, len(lbls), step))
+    ax.set_xticklabels([lbls[i] for i in range(0, len(lbls), step)], rotation=30, fontsize=6.5)
+    _base_ax(ax, "y")
+    plt.tight_layout(pad=0.6)
+    return _save(fig)
 
 def chart_heatmap(df, ct):
-    dcs = ct.get("datetime", [])
-    sc = _s(df, ct)
-    if not dcs or not sc: return None
-    dc = dcs[0]
+    dc, sc = _date_col(df, ct), _sales_col(df, ct)
+    if not dc or not sc: return None
     tmp = df.copy()
     tmp[dc] = pd.to_datetime(tmp[dc], errors="coerce")
-    tmp = tmp.dropna(subset=[dc])                  # drop NaT rows before int cast
+    tmp = tmp.dropna(subset=[dc])
     if tmp.empty: return None
     tmp["month"] = tmp[dc].dt.month.astype(int)
     tmp["year"]  = tmp[dc].dt.year.astype(int)
-    piv = tmp.pivot_table(index="year", columns="month", values=sc, aggfunc="sum")
-    if piv.empty: return None
-    piv = piv.fillna(0)
+    piv = tmp.pivot_table(index="year", columns="month", values=sc, aggfunc="sum").fillna(0)
     piv.columns = piv.columns.astype(int)
     piv.index   = piv.index.astype(int)
-    fig, ax = plt.subplots(figsize=(5.2, 2.8))
+    fig, ax = plt.subplots(figsize=(5.4, 2.9))
+    fig.patch.set_facecolor("white")
     months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-    im = ax.imshow(piv.values, cmap="Purples", aspect="auto", interpolation="nearest")
+    im = ax.imshow(piv.values, cmap="BuPu", aspect="auto", interpolation="nearest")
     ax.set_xticks(range(piv.shape[1]))
     ax.set_xticklabels([months[m-1] for m in piv.columns], fontsize=7)
     ax.set_yticks(range(piv.shape[0]))
     ax.set_yticklabels([str(y) for y in piv.index], fontsize=7)
-    ax.set_title(f"{sc} Seasonality Heatmap", fontsize=10, fontweight="bold",
-                 color="#7C3AED", pad=8, loc="left")
+    # Highlight peak cell
+    flat_max = np.unravel_index(np.argmax(piv.values), piv.values.shape)
+    ax.add_patch(plt.Rectangle((flat_max[1]-0.5, flat_max[0]-0.5), 1, 1,
+                                fill=False, edgecolor="#FBBF24", lw=2.5))
     cbar = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.04)
     cbar.ax.tick_params(labelsize=6)
-    fig.patch.set_facecolor("white")
-    plt.tight_layout(pad=0.5)
-    return _fig_bytes(fig)
+    _chart_title(ax, f"{sc} Seasonality Heatmap", CHART_PALETTE["heatmap"])
+    plt.tight_layout(pad=0.6)
+    return _save(fig)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# REPORTLAB  PDF
+# REPORTLAB PDF HELPERS
 # ════════════════════════════════════════════════════════════════════════════════
-
-# KPI box colour pairs (background light, value accent)
-_KPI_COLOURS = [
-    ("#E0F7FA", "#00897B"),   # 0 cyan-teal
-    ("#F0FDF4", "#16A34A"),   # 1 green
-    ("#EFF6FF", "#2563EB"),   # 2 blue
-    ("#F5F3FF", "#7C3AED"),   # 3 violet
-    ("#FFFBEB", "#D97706"),   # 4 amber
-    ("#FFF1F2", "#DC2626"),   # 5 rose
-]
-
-def _hf(canvas, doc):
-    """Header + footer drawn on every page."""
-    canvas.saveState()
-    w, h = A4
-    # Purple header bar
-    canvas.setFillColor(colors.HexColor("#7C3AED"))
-    canvas.rect(0, h - 18*mm, w, 18*mm, fill=1, stroke=0)
-    canvas.setFillColor(colors.white)
-    canvas.setFont("Helvetica-Bold", 11)
-    canvas.drawCentredString(w/2, h - 11*mm,
-        "Zero Click AI  —  Comprehensive Analysis Report")
-    # Sub-bar
-    canvas.setFillColor(colors.HexColor("#A78BFA"))
-    canvas.rect(0, h - 24*mm, w, 6*mm, fill=1, stroke=0)
-    canvas.setFillColor(colors.white)
-    canvas.setFont("Helvetica", 7)
-    canvas.drawString(12*mm, h - 21*mm,
-        f"  Report Date: {NOW.strftime('%Y-%m-%d')}  |  "
-        f"Period: Data from Jan 2025 – Mar 2026")
-    canvas.drawRightString(w - 12*mm, h - 21*mm,
-        "Source: Zero Click AI  ")
-    # Footer
-    canvas.setFillColor(colors.HexColor("#9CA3AF"))
-    canvas.setFont("Helvetica-Oblique", 7)
-    canvas.drawCentredString(w/2, 8*mm,
-        f"Page {doc.page}  |  Generated {NOW.strftime('%Y-%m-%d %H:%M')}  |  Genesis Training")
-    canvas.restoreState()
-
-
-def _style(name, **kw):
+def _ps(name, **kw):
     return ParagraphStyle(name, **kw)
 
 def _styles():
     return {
-        "section": _style("sec", fontName="Helvetica-Bold", fontSize=11,
-                          textColor=colors.HexColor("#7C3AED"),
-                          spaceBefore=8, spaceAfter=3),
-        "body":    _style("body", fontName="Helvetica", fontSize=8.5,
-                          textColor=colors.HexColor("#1F2937"),
-                          spaceAfter=3, leading=13),
-        "bold":    _style("bold", fontName="Helvetica-Bold", fontSize=9,
-                          textColor=colors.HexColor("#7C3AED"), spaceAfter=2),
-        "note":    _style("note", fontName="Helvetica-Oblique", fontSize=7,
-                          textColor=colors.HexColor("#9CA3AF")),
-        "ai_head": _style("aih", fontName="Helvetica-Bold", fontSize=9,
-                          textColor=colors.HexColor("#7C3AED"),
-                          spaceBefore=5, spaceAfter=2),
+        "section": _ps("sec", fontName="Helvetica-Bold", fontSize=11.5,
+                       textColor=colors.HexColor(BRAND["deep"]),
+                       spaceBefore=5, spaceAfter=2),
+        "sub":     _ps("sub", fontName="Helvetica-Bold", fontSize=9,
+                       textColor=colors.HexColor(BRAND["mid"]),
+                       spaceBefore=4, spaceAfter=2),
+        "body":    _ps("body", fontName="Helvetica", fontSize=8.5,
+                       textColor=colors.HexColor(BRAND["ink"]),
+                       leading=13, spaceAfter=2),
+        "bullet":  _ps("blt", fontName="Helvetica", fontSize=8.5,
+                       textColor=colors.HexColor(BRAND["ink"]),
+                       leading=13, spaceAfter=2, leftIndent=12),
+        "note":    _ps("note", fontName="Helvetica-Oblique", fontSize=7,
+                       textColor=colors.HexColor(BRAND["muted"])),
     }
 
-
-def _section_hdr(text, ST):
+def _section_block(text, ST):
     return [
         Paragraph(text, ST["section"]),
-        HRFlowable(width="100%", thickness=0.6,
-                   color=colors.HexColor("#A78BFA"), spaceAfter=4),
+        HRFlowable(width="100%", thickness=0.9,
+                   color=colors.HexColor(BRAND["soft"]), spaceAfter=5),
     ]
 
+def _hf(canvas, doc):
+    """Branded header + footer on every page."""
+    canvas.saveState()
+    W, H = A4
 
-def _build_kpi_row(kpi_triples, start_idx=0, pw=None):
-    """
-    Build ONE row of 3 KPI boxes.
-    kpi_triples = [(label, value, delta), ...]  (3 items)
-    """
-    col_w = (pw - 6*mm) / 3
+    # Header — deep band
+    canvas.setFillColor(colors.HexColor(BRAND["deep"]))
+    canvas.rect(0, H - 20*mm, W, 20*mm, fill=1, stroke=0)
+
+    # Teal left accent strip
+    canvas.setFillColor(colors.HexColor(BRAND["teal"]))
+    canvas.rect(0, H - 20*mm, 4*mm, 20*mm, fill=1, stroke=0)
+
+    # Report title
+    canvas.setFillColor(colors.white)
+    canvas.setFont("Helvetica-Bold", 11.5)
+    canvas.drawString(10*mm, H - 12*mm, "Zero Click AI  ·  Comprehensive Analysis Report")
+
+    # Sub-line
+    canvas.setFont("Helvetica", 7.5)
+    canvas.setFillColor(colors.HexColor(BRAND["soft"]))
+    canvas.drawString(10*mm, H - 17.5*mm,
+                      f"Report Date: {NOW.strftime('%d %b %Y')}  |  "
+                      f"Generated: {NOW.strftime('%H:%M')}  |  Genesis Training")
+    canvas.drawRightString(W - 10*mm, H - 17.5*mm, "Source: Zero Click AI")
+
+    # Footer
+    canvas.setFillColor(colors.HexColor(BRAND["pale"]))
+    canvas.rect(0, 0, W, 10*mm, fill=1, stroke=0)
+    canvas.setFillColor(colors.HexColor(BRAND["teal"]))
+    canvas.rect(0, 0, 3*mm, 10*mm, fill=1, stroke=0)
+    canvas.setFillColor(colors.HexColor(BRAND["muted"]))
+    canvas.setFont("Helvetica", 7)
+    canvas.drawCentredString(W/2, 3.5*mm,
+                             f"Page {doc.page}  |  Confidential — For Internal Use Only")
+    canvas.restoreState()
+
+def _kpi_row(kpi_triples, start_idx, pw):
+    col_w = (pw - 8*mm) / 3
     cells = []
     for i, (lbl, val, dlt) in enumerate(kpi_triples):
-        idx   = (start_idx + i) % len(_KPI_COLOURS)
-        bg, accent = _KPI_COLOURS[idx]
-        pos   = not str(dlt).lstrip().startswith("-")
-        dlt_c = colors.HexColor("#16A34A") if pos else colors.HexColor("#DC2626")
-        sym   = "▲" if pos else "▼"
-
+        idx     = (start_idx + i) % len(KPI_CARDS)
+        bg, acc = KPI_CARDS[idx]
+        is_pos  = not str(dlt).lstrip().startswith("-")
+        dlt_col = colors.HexColor(BRAND["green"]) if is_pos else colors.HexColor(BRAND["red"])
+        sym     = "▲" if is_pos else "▼"
         inner = Table(
-            [[Paragraph(str(val)[:16],
-                        _style(f"kv{i}", fontName="Helvetica-Bold", fontSize=14,
-                               textColor=colors.HexColor(accent), alignment=TA_CENTER))],
-             [Paragraph(f"{sym} {dlt}",
-                        _style(f"kd{i}", fontName="Helvetica", fontSize=8,
-                               textColor=dlt_c, alignment=TA_CENTER))],
-             [Paragraph(str(lbl)[:22],
-                        _style(f"kl{i}", fontName="Helvetica", fontSize=7,
-                               textColor=colors.HexColor("#6B7280"), alignment=TA_CENTER))]],
+            [[Paragraph(str(val)[:14],
+                        _ps(f"kv{i}", fontName="Helvetica-Bold", fontSize=15,
+                            textColor=colors.HexColor(acc), alignment=TA_CENTER))],
+             [Paragraph(f"{sym}  {dlt}",
+                        _ps(f"kd{i}", fontName="Helvetica", fontSize=7.5,
+                            textColor=dlt_col, alignment=TA_CENTER))],
+             [Paragraph(str(lbl)[:26],
+                        _ps(f"kl{i}", fontName="Helvetica-Bold", fontSize=7,
+                            textColor=colors.HexColor(BRAND["muted"]),
+                            alignment=TA_CENTER))]],
             colWidths=[col_w],
             style=TableStyle([
-                ("BACKGROUND",    (0,0), (-1,-1), colors.HexColor(bg)),
-                ("BOX",           (0,0), (-1,-1), 0.8, colors.HexColor(accent)),
-                ("TOPPADDING",    (0,0), (-1,-1), 6),
-                ("BOTTOMPADDING", (0,0), (-1,-1), 6),
-                ("ALIGN",         (0,0), (-1,-1), "CENTER"),
-                ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+                ("BACKGROUND",    (0,0),(-1,-1), colors.HexColor(bg)),
+                ("BOX",           (0,0),(-1,-1), 1.2, colors.HexColor(acc)),
+                ("LINEABOVE",     (0,0),(-1,0),  3,   colors.HexColor(acc)),
+                ("TOPPADDING",    (0,0),(-1,-1), 8),
+                ("BOTTOMPADDING", (0,0),(-1,-1), 8),
+                ("ALIGN",         (0,0),(-1,-1), "CENTER"),
+                ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
             ])
         )
         cells.append(inner)
 
-    row_tbl = Table([cells],
-                    colWidths=[col_w + 2*mm]*3,
-                    style=TableStyle([
-                        ("ALIGN",        (0,0), (-1,-1), "CENTER"),
-                        ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
-                        ("LEFTPADDING",  (0,0), (-1,-1), 2),
-                        ("RIGHTPADDING", (0,0), (-1,-1), 2),
-                    ]))
-    return row_tbl
+    return Table([cells],
+                 colWidths=[col_w + 2.5*mm]*3,
+                 style=TableStyle([
+                     ("ALIGN",         (0,0),(-1,-1), "CENTER"),
+                     ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+                     ("LEFTPADDING",   (0,0),(-1,-1), 2),
+                     ("RIGHTPADDING",  (0,0),(-1,-1), 2),
+                 ]))
 
-
-def _mini_tbl(headers, rows, col_w_mm, row_h=5.5):
-    """Styled data table — purple header, alternating rows."""
+def _data_table(headers, rows, col_w_mm):
     cw   = [w * mm for w in col_w_mm]
     data = [headers] + rows
-    tbl  = Table(data, colWidths=cw, repeatRows=1)
     style = [
-        # Header
-        ("BACKGROUND",    (0,0), (-1, 0), colors.HexColor("#7C3AED")),
-        ("TEXTCOLOR",     (0,0), (-1, 0), colors.white),
-        ("FONTNAME",      (0,0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE",      (0,0), (-1, 0), 8),
-        ("ALIGN",         (0,0), (-1,-1), "CENTER"),
-        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-        ("GRID",          (0,0), (-1,-1), 0.25, colors.HexColor("#D1D5DB")),
-        ("FONTSIZE",      (0,1), (-1,-1), 7.5),
-        ("TOPPADDING",    (0,0), (-1,-1), 3),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+        ("BACKGROUND",    (0,0),(-1,0),  colors.HexColor(BRAND["deep"])),
+        ("TEXTCOLOR",     (0,0),(-1,0),  colors.white),
+        ("FONTNAME",      (0,0),(-1,0),  "Helvetica-Bold"),
+        ("FONTSIZE",       (0,0),(-1,0),  8),
+        ("FONTNAME",      (0,1),(-1,-1), "Helvetica"),
+        ("FONTSIZE",       (0,1),(-1,-1), 7.5),
+        ("ALIGN",         (0,0),(-1,-1), "CENTER"),
+        ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+        ("GRID",          (0,0),(-1,-1), 0.3, colors.HexColor(BRAND["rule"])),
+        ("TOPPADDING",    (0,0),(-1,-1), 3.5),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 3.5),
+        ("LINEBELOW",     (0,0),(-1,0),  2, colors.HexColor(BRAND["teal"])),
     ]
-    # Alternating row backgrounds
     for r in range(1, len(data)):
-        bg = "#F3F0FF" if r % 2 == 1 else "#FFFFFF"
-        style.append(("BACKGROUND", (0,r), (-1,r), colors.HexColor(bg)))
+        bg = BRAND["row_a"] if r % 2 == 1 else BRAND["row_b"]
+        style.append(("BACKGROUND", (0,r),(-1,r), colors.HexColor(bg)))
+    tbl = Table(data, colWidths=cw, repeatRows=1)
     tbl.setStyle(TableStyle(style))
     return tbl
 
-
 def _chart_img(buf, w_mm, h_mm):
-    if buf is None: return None
+    if buf is None: return Spacer(w_mm*mm, h_mm*mm)
     return RLImage(buf, width=w_mm*mm, height=h_mm*mm)
 
 
+# ════════════════════════════════════════════════════════════════════════════════
+# MAIN PDF GENERATOR
+# ════════════════════════════════════════════════════════════════════════════════
 def generate_report_pdf(df, kpis, ml_results, forecast_data, insights, charts) -> bytes:
     if not HAS_RL:
         return b""
 
-    ct     = _col_types(df)
-    ST     = _styles()
-    pw     = A4[0] - 24*mm   # usable page width
-    buf    = io.BytesIO()
+    ct = _col_types(df)
+    ST = _styles()
+    pw = A4[0] - 24*mm
 
+    buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
-        topMargin=28*mm, bottomMargin=18*mm,
+        topMargin=24*mm, bottomMargin=14*mm,
         leftMargin=12*mm, rightMargin=12*mm,
     )
     story = []
 
-    # ── Page 1: Performance Dashboard ─────────────────────────────────────────
-    # Title bar
-    dash_t = Table(
-        [[Paragraph("PERFORMANCE DASHBOARD",
-                    _style("dt", fontName="Helvetica-Bold", fontSize=13,
-                           textColor=colors.HexColor("#7C3AED"), alignment=TA_CENTER))]],
+    # ══════════════════════════════════════════════════════════════════════════
+    # PAGE 1 — EXECUTIVE DASHBOARD
+    # ══════════════════════════════════════════════════════════════════════════
+    banner = Table(
+        [[Paragraph("EXECUTIVE PERFORMANCE DASHBOARD",
+                    _ps("bh", fontName="Helvetica-Bold", fontSize=12,
+                        textColor=colors.white, alignment=TA_CENTER))]],
         colWidths=[pw],
         style=TableStyle([
-            ("BACKGROUND",    (0,0),(-1,-1), colors.HexColor("#EDE9FE")),
-            ("BOX",           (0,0),(-1,-1), 0.8, colors.HexColor("#A78BFA")),
-            ("TOPPADDING",    (0,0),(-1,-1), 7),
-            ("BOTTOMPADDING", (0,0),(-1,-1), 7),
+            ("BACKGROUND",    (0,0),(-1,-1), colors.HexColor(BRAND["mid"])),
+            ("TOPPADDING",    (0,0),(-1,-1), 9),
+            ("BOTTOMPADDING", (0,0),(-1,-1), 9),
+            ("LINEABOVE",     (0,0),(-1,0),  3, colors.HexColor(BRAND["teal"])),
+            ("LINEBELOW",     (0,0),(-1,-1), 3, colors.HexColor(BRAND["teal"])),
         ])
     )
-    story.append(dash_t)
-    story.append(Spacer(1, 4*mm))
+    story.append(banner)
+    story.append(Spacer(1, 5*mm))
 
-    # KPI boxes
     kpi_list = list(kpis or [])
     while len(kpi_list) < 6:
         kpi_list.append(("N/A", "—", "—"))
@@ -600,202 +587,244 @@ def generate_report_pdf(df, kpis, ml_results, forecast_data, insights, charts) -
         if len(k) == 2: return (str(k[0]), str(k[1]), "—")
         return (str(k[0]), "—", "—")
 
-    story.append(_build_kpi_row([_ktriple(kpi_list[i]) for i in range(3)], 0, pw))
+    story.append(_kpi_row([_ktriple(kpi_list[i]) for i in range(3)], 0, pw))
     story.append(Spacer(1, 4*mm))
-    story.append(_build_kpi_row([_ktriple(kpi_list[i]) for i in range(3, 6)], 3, pw))
-    story.append(Spacer(1, 5*mm))
+    story.append(_kpi_row([_ktriple(kpi_list[i]) for i in range(3, 6)], 3, pw))
+    story.append(Spacer(1, 7*mm))
 
-    # AI Summary section
-    ai_head_tbl = Table(
-        [[Paragraph("  AI NARRATED SUMMARY",
-                    _style("aih2", fontName="Helvetica-Bold", fontSize=9,
-                           textColor=colors.HexColor("#7C3AED")))]],
+    # AI Summary
+    ai_hdr = Table(
+        [[Paragraph("  ◈  AI NARRATED SUMMARY",
+                    _ps("aih", fontName="Helvetica-Bold", fontSize=9,
+                        textColor=colors.HexColor(BRAND["deep"])))]],
         colWidths=[pw],
         style=TableStyle([
-            ("BACKGROUND",    (0,0),(-1,-1), colors.HexColor("#EDE9FE")),
-            ("BOX",           (0,0),(-1,-1), 0.5, colors.HexColor("#A78BFA")),
-            ("TOPPADDING",    (0,0),(-1,-1), 3),
-            ("BOTTOMPADDING", (0,0),(-1,-1), 3),
+            ("BACKGROUND",    (0,0),(-1,-1), colors.HexColor(BRAND["pale"])),
+            ("LINEABOVE",     (0,0),(-1,0),  3, colors.HexColor(BRAND["teal"])),
+            ("TOPPADDING",    (0,0),(-1,-1), 5),
+            ("BOTTOMPADDING", (0,0),(-1,-1), 5),
         ])
     )
-    story.append(ai_head_tbl)
+    story.append(ai_hdr)
 
-    # AI text body
     ai_short = ""
     if isinstance(insights, str):
         lines = [l.strip() for l in insights.split("\n")
                  if l.strip() and not l.strip().startswith("#")]
-        ai_short = " ".join(lines[:4])[:520]
+        ai_short = " ".join(lines[:5])[:700]
     elif isinstance(insights, list):
-        ai_short = " ".join(str(i) for i in insights[:4])[:520]
+        ai_short = " ".join(str(i) for i in insights[:5])[:700]
 
     ai_body = Table(
-        [[Paragraph(ai_short or "AI analysis complete.", ST["body"])]],
+        [[Paragraph(ai_short or "Analysis complete.", ST["body"])]],
         colWidths=[pw],
         style=TableStyle([
             ("BACKGROUND",    (0,0),(-1,-1), colors.white),
-            ("BOX",           (0,0),(-1,-1), 0.5, colors.HexColor("#A78BFA")),
-            ("TOPPADDING",    (0,0),(-1,-1), 7),
-            ("BOTTOMPADDING", (0,0),(-1,-1), 7),
-            ("LEFTPADDING",   (0,0),(-1,-1), 10),
-            ("RIGHTPADDING",  (0,0),(-1,-1), 10),
+            ("BOX",           (0,0),(-1,-1), 0.6, colors.HexColor(BRAND["rule"])),
+            ("TOPPADDING",    (0,0),(-1,-1), 9),
+            ("BOTTOMPADDING", (0,0),(-1,-1), 9),
+            ("LEFTPADDING",   (0,0),(-1,-1), 12),
+            ("RIGHTPADDING",  (0,0),(-1,-1), 12),
         ])
     )
     story.append(ai_body)
-    story.append(Spacer(1, 2*mm))
-    story.append(Paragraph("*Profit margin = Profit/Sales", ST["note"]))
+    story.append(Spacer(1, 3*mm))
+    story.append(Paragraph(
+        "*Profit margin = Profit / Sales  |  Data reflects the period shown in available records.",
+        ST["note"]))
 
-    # ── Page 2: Charts ────────────────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════════
+    # PAGE 2 — VISUAL ANALYTICS
+    # ══════════════════════════════════════════════════════════════════════════
     story.append(PageBreak())
-    story.extend(_section_hdr("Dataset Charts", ST))
+    story.extend(_section_block("Visual Analytics", ST))
 
-    chart_fns = [
-        (f"{_metric_label(df, ct)} by {_group_label(_reg(df, ct), 'Region')}",      lambda: chart_region(df, ct)),
-        (f"{_metric_label(df, ct)} by {_group_label(_cat(df, ct), 'Category')}",    lambda: chart_category(df, ct)),
-        (f"Monthly {_metric_label(df, ct)} Trend",  lambda: chart_trend(df, ct)),
-        (f"{_s(df, ct) or 'Metric'} vs {_p(df, ct) or 'Secondary Metric'}",      lambda: chart_scatter(df, ct)),
-        ("Monthly Record Count Trend", lambda: chart_orders(df, ct)),
-        (f"{_metric_label(df, ct)} Seasonality Heatmap",  lambda: chart_heatmap(df, ct)),
+    chart_defs = [
+        (f"{_sales_col(df,ct) or 'Sales'} by Region",
+         lambda: chart_region(df, ct)),
+        (f"Sales by {_cat_col(df,ct) or 'Category'}",
+         lambda: chart_category(df, ct)),
+        (f"Monthly {_sales_col(df,ct) or 'Sales'} Trend",
+         lambda: chart_trend(df, ct)),
+        (f"{_sales_col(df,ct) or 'Sales'} vs {_profit_col(df,ct) or 'Profit'}",
+         lambda: chart_scatter(df, ct)),
+        ("Monthly Order Volume",
+         lambda: chart_orders(df, ct)),
+        (f"{_sales_col(df,ct) or 'Sales'} Seasonality",
+         lambda: chart_heatmap(df, ct)),
     ]
-    chart_imgs = []
-    for title, fn in chart_fns:
+
+    rendered = []
+    for title, fn in chart_defs:
         try:
             b = fn()
-            if b: chart_imgs.append((title, b))
+            if b: rendered.append((title, b))
         except Exception as e:
             print(f"  Chart '{title}' skipped: {e}")
 
-    CW = (pw - 4*mm) / 2
-    CH = 68  # mm height for each chart (taller for pie/donut legend space)
-    for i in range(0, len(chart_imgs), 2):
-        lt, lb = chart_imgs[i]
-        rt, rb = chart_imgs[i+1] if i+1 < len(chart_imgs) else (None, None)
-        li = _chart_img(lb, CW/mm, CH) or Spacer(1, 1)
-        ri = _chart_img(rb, CW/mm, CH) if rb else Spacer(1, 1)
-        lbl = lambda t: Paragraph(t or "",
-            _style("ct", fontName="Helvetica-Bold", fontSize=8,
-                   textColor=colors.HexColor("#374151"), alignment=TA_CENTER))
-        row_tbl = Table([[lbl(lt), lbl(rt)], [li, ri]],
-                        colWidths=[CW, CW],
-                        style=TableStyle([
-                            ("ALIGN",         (0,0),(-1,-1),"CENTER"),
-                            ("VALIGN",        (0,0),(-1,-1),"MIDDLE"),
-                            ("LEFTPADDING",   (0,0),(-1,-1), 2),
-                            ("RIGHTPADDING",  (0,0),(-1,-1), 2),
-                            ("BOTTOMPADDING", (0,0),(-1,-1), 3),
-                        ]))
-        story.append(row_tbl)
-        story.append(Spacer(1, 3*mm))
+    CW = (pw - 5*mm) / 2
+    CH = 66
 
-    # ── Page 3: Top Products ──────────────────────────────────────────────────
+    for i in range(0, len(rendered), 2):
+        lt, lb = rendered[i]
+        rt, rb = rendered[i+1] if i+1 < len(rendered) else (None, None)
+        li = _chart_img(lb, CW/mm, CH)
+        ri = _chart_img(rb, CW/mm, CH) if rb else Spacer(CW, CH*mm)
+
+        def _cap(t):
+            return Paragraph(t or "",
+                             _ps("ct", fontName="Helvetica-Bold", fontSize=7.5,
+                                 textColor=colors.HexColor(BRAND["muted"]),
+                                 alignment=TA_CENTER))
+
+        grid = Table(
+            [[_cap(lt), _cap(rt)], [li, ri]],
+            colWidths=[CW, CW],
+            style=TableStyle([
+                ("ALIGN",         (0,0),(-1,-1), "CENTER"),
+                ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+                ("LEFTPADDING",   (0,0),(-1,-1), 2),
+                ("RIGHTPADDING",  (0,0),(-1,-1), 2),
+                ("BOTTOMPADDING", (0,0),(-1,-1), 4),
+            ])
+        )
+        story.append(grid)
+        if i + 2 < len(rendered):
+            story.append(Spacer(1, 2*mm))
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # PAGE 3 — TOP ITEMS + AI INSIGHTS (two-column)
+    # ══════════════════════════════════════════════════════════════════════════
     story.append(PageBreak())
-    story.extend(_section_hdr("Top Records by Key Metric", ST))
-    tp = top_products(df, ct, n=16)
-    if not tp.empty:
-        hdrs = list(tp.columns)
-        nc   = len(hdrs)
-        cw   = [10] + [int((pw/mm - 12)/(nc-1))]*(nc-1)
-        rows = [[str(tp.iloc[i][c])[:22] for c in tp.columns]
-                for i in range(len(tp))]
-        story.append(_mini_tbl(hdrs, rows, cw))
+    story.extend(_section_block("Top Records by Key Metric", ST))
 
-    # ── Page 4: ML Insights ───────────────────────────────────────────────────
+    tp    = _top_items(df, ct, n=16)
+    hdrs  = list(tp.columns)
+    nc    = len(hdrs)
+    t_pw  = pw * 0.55
+    i_pw  = pw * 0.41
+
+    col_w = [8] + [int((t_pw/mm - 10) / (nc-1))] * (nc-1)
+    t_rows = [[str(tp.iloc[r][c])[:20] for c in tp.columns] for r in range(len(tp))]
+    prod_tbl = _data_table(hdrs, t_rows, col_w)
+
+    # Build insights paragraphs
+    full_ins = (insights if isinstance(insights, str)
+                else "\n".join(f"• {i}" for i in (insights or [])))
+    ins_items = [
+        Paragraph("AI Insights", ST["section"]),
+        HRFlowable(width="100%", thickness=0.9,
+                   color=colors.HexColor(BRAND["soft"]), spaceAfter=5),
+    ]
+    for line in full_ins.split("\n"):
+        line = line.strip()
+        if not line:
+            ins_items.append(Spacer(1, 2*mm))
+        elif line.startswith("## "):
+            ins_items.append(Paragraph(line[3:], ST["sub"]))
+        elif line.startswith(("- ","• ","* ")):
+            ins_items.append(Paragraph(f"• {line[2:]}", ST["bullet"]))
+        else:
+            ins_items.append(Paragraph(line, ST["body"]))
+
+    ins_tbl = Table(
+        [[item] for item in ins_items],
+        colWidths=[i_pw],
+        style=TableStyle([
+            ("TOPPADDING",    (0,0),(-1,-1), 1),
+            ("BOTTOMPADDING", (0,0),(-1,-1), 1),
+            ("LEFTPADDING",   (0,0),(-1,-1), 8),
+            ("RIGHTPADDING",  (0,0),(-1,-1), 0),
+        ])
+    )
+
+    two_col = Table(
+        [[prod_tbl, ins_tbl]],
+        colWidths=[t_pw + 2*mm, i_pw],
+        style=TableStyle([
+            ("VALIGN",       (0,0),(-1,-1), "TOP"),
+            ("LEFTPADDING",  (0,0),(-1,-1), 0),
+            ("RIGHTPADDING", (0,0),(-1,-1), 0),
+            ("LINEBEFORE",   (1,0),(1,-1), 0.5, colors.HexColor(BRAND["rule"])),
+        ])
+    )
+    story.append(two_col)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # PAGE 4 — DATASET SAMPLE
+    # ══════════════════════════════════════════════════════════════════════════
     story.append(PageBreak())
-    story.extend(_section_hdr("Machine Learning Insights", ST))
-    if ml_results:
-        for res in ml_results:
-            story.append(Paragraph(f"■  {res.get('title','Model')}", ST["bold"]))
-            story.append(Paragraph(
-                f"    {res.get('metric_name')}: {res.get('metric_value')}",
-                _style("mv", fontName="Helvetica", fontSize=8,
-                       textColor=colors.HexColor("#16A34A"), spaceAfter=2)))
-            story.append(Paragraph(
-                f"    Type: {res.get('type')} | {res.get('extra','')}",
-                ST["body"]))
-            story.append(Spacer(1, 3*mm))
-    else:
-        story.append(Paragraph("ML models not trained — need numeric columns.", ST["body"]))
+    story.extend(_section_block("Dataset Sample — First 20 Rows", ST))
 
-    # ── Page 5: Forecast ──────────────────────────────────────────────────────
+    sample = df.head(20).astype(str)
+    cols   = list(sample.columns[:8])
+    nc2    = len(cols)
+    cw2    = [int(pw/mm / nc2)] * nc2
+    s_rows = [[str(sample.iloc[r][c])[:16] for c in cols] for r in range(len(sample))]
+    story.append(_data_table([c[:14] for c in cols], s_rows, cw2))
+    story.append(Spacer(1, 3*mm))
+    story.append(Paragraph(
+        f"Showing first 20 of {len(df):,} records  |  {len(df.columns)} columns total.",
+        ST["note"]))
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # PAGE 5 (OPTIONAL) — FORECAST
+    # ══════════════════════════════════════════════════════════════════════════
     if forecast_data:
         story.append(PageBreak())
-        story.extend(_section_hdr("Time-Series Forecast", ST))
+        story.extend(_section_block("Time-Series Forecast", ST))
         story.append(Paragraph(
-            f"Model: {forecast_data.get('model','N/A')}  |  6-month horizon",
-            ST["body"]))
+            f"Model: {forecast_data.get('model','N/A')}  |  Horizon: 6 months", ST["body"]))
         story.append(Spacer(1, 3*mm))
         fdf = forecast_data.get("forecast_df")
         if fdf is not None and not fdf.empty:
-            hdrs = ["Period", "Predicted", "Lower 95%", "Upper 95%"]
-            cw   = [50, 44, 44, 44]
-            rows = []
+            f_hdrs = ["Period", "Predicted", "Lower 95%", "Upper 95%"]
+            f_cw   = [50, 44, 44, 44]
+            f_rows = []
             for _, row in fdf.head(12).iterrows():
                 dt = str(row.get("ds","")).split(" ")[0]
-                rows.append([dt,
-                    f"${_num(row.get('yhat',0)):,.0f}",
-                    f"${_num(row.get('yhat_lower',0)):,.0f}",
-                    f"${_num(row.get('yhat_upper',0)):,.0f}"])
-            story.append(_mini_tbl(hdrs, rows, cw))
+                f_rows.append([dt,
+                               f"${_num(row.get('yhat',0)):,.0f}",
+                               f"${_num(row.get('yhat_lower',0)):,.0f}",
+                               f"${_num(row.get('yhat_upper',0)):,.0f}"])
+            story.append(_data_table(f_hdrs, f_rows, f_cw))
 
-    # ── Page 6: Full AI Insights ──────────────────────────────────────────────
-    story.append(PageBreak())
-    story.extend(_section_hdr("Full AI Insights", ST))
-    full = (insights if isinstance(insights, str)
-            else "\n".join(f"• {i}" for i in (insights or [])))
-    for line in full.split("\n"):
-        line = line.strip()
-        if not line:
-            story.append(Spacer(1, 2*mm))
-        elif line.startswith("## "):
-            story.append(Paragraph(line[3:], ST["ai_head"]))
-        elif line.startswith(("- ", "• ", "* ")):
-            story.append(Paragraph(f"  • {line[2:]}", ST["body"]))
-        else:
-            story.append(Paragraph(line, ST["body"]))
-
-    # ── Page 7: Dataset Sample ────────────────────────────────────────────────
-    story.append(PageBreak())
-    story.extend(_section_hdr("Dataset Sample — First 20 Rows", ST))
-    sample = df.head(20).astype(str)
-    cols   = list(sample.columns[:7])
-    nc     = len(cols)
-    cw     = [int(pw/mm / nc)] * nc
-    rows   = [[str(sample.iloc[i][c])[:18] for c in cols]
-              for i in range(len(sample))]
-    story.append(_mini_tbl([c[:16] for c in cols], rows, cw))
+    # ML page — only if populated
+    if ml_results:
+        story.append(PageBreak())
+        story.extend(_section_block("Machine Learning Insights", ST))
+        for res in ml_results:
+            story.append(Paragraph(f"■  {res.get('title','Model')}", ST["sub"]))
+            story.append(Paragraph(
+                f"    {res.get('metric_name')}: {res.get('metric_value')}",
+                _ps("mv", fontName="Helvetica", fontSize=8.5,
+                    textColor=colors.HexColor(BRAND["green"]), spaceAfter=2)))
+            story.append(Paragraph(
+                f"    Type: {res.get('type')}  |  {res.get('extra','')}",
+                ST["body"]))
+            story.append(Spacer(1, 3*mm))
 
     doc.build(story, onFirstPage=_hf, onLaterPages=_hf)
     return buf.getvalue()
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# EXCEL REPORT  — multi-coloured, polished worksheets
+# EXCEL REPORT
 # ════════════════════════════════════════════════════════════════════════════════
-
-# Tab/sheet accent colours
-_SHEET_ACCENTS = {
-    "README":             "7C3AED",
-    "KPIs":               "0891B2",
-    "Sales_by_Region":    "059669",
-    "Sales_by_Category":  "7C3AED",
-    "Top10_Products_Profit": "C2410C",
-    "Monthly_Trend":      "1D4ED8",
-    "Raw_Data":           "374151",
-}
-
-def _xl_hdr(ws, row, headers, accent="7C3AED"):
+def _xl_hdr(ws, row, headers, accent):
     fill = PatternFill("solid", fgColor=accent)
     fnt  = Font(bold=True, color="FFFFFF", size=10)
     bdr  = Border(left=Side(style="thin"), right=Side(style="thin"),
-                  top=Side(style="thin"),  bottom=Side(style="thin"))
+                  top=Side(style="thin"), bottom=Side(style="medium"))
     for ci, h in enumerate(headers, 1):
         c = ws.cell(row=row, column=ci, value=h)
         c.fill = fill; c.font = fnt; c.border = bdr
         c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        ws.column_dimensions[get_column_letter(ci)].width = max(14, len(str(h))+4)
+        ws.column_dimensions[get_column_letter(ci)].width = max(14, len(str(h))+5)
+    ws.row_dimensions[row].height = 20
 
-def _xl_row(ws, ri, vals, alt=False, accent="7C3AED"):
-    hex_bg = "F3F0FF" if alt else "FFFFFF"
+def _xl_data_row(ws, ri, vals, alt=False):
+    hex_bg = "F5F3FF" if alt else "FFFFFF"
     fill = PatternFill("solid", fgColor=hex_bg)
     bdr  = Border(left=Side(style="thin"), right=Side(style="thin"),
                   top=Side(style="thin"),  bottom=Side(style="thin"))
@@ -805,188 +834,190 @@ def _xl_row(ws, ri, vals, alt=False, accent="7C3AED"):
         c.font = Font(size=9)
         c.alignment = Alignment(horizontal="center", vertical="center")
 
-def _xl_title(ws, text, row=1, end_col=8, accent="7C3AED"):
+def _xl_title(ws, text, row=1, end_col=8, accent="4C1D95"):
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=end_col)
     c = ws.cell(row=row, column=1, value=text)
     c.fill = PatternFill("solid", fgColor=accent)
-    c.font = Font(bold=True, color="FFFFFF", size=12)
+    c.font = Font(bold=True, color="FFFFFF", size=13)
     c.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[row].height = 24
+    ws.row_dimensions[row].height = 28
 
-def _write_df_xl(ws, df_in, start=2, accent="7C3AED"):
+def _xl_subtitle(ws, text, row, end_col=8, accent="0D9488"):
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=end_col)
+    c = ws.cell(row=row, column=1, value=text)
+    c.fill = PatternFill("solid", fgColor=accent)
+    c.font = Font(bold=True, color="FFFFFF", size=9)
+    c.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[row].height = 16
+
+def _write_df(ws, df_in, start=3, accent="4C1D95"):
     hdrs = list(df_in.columns)
     _xl_hdr(ws, start, hdrs, accent)
     for ri, (_, row) in enumerate(df_in.iterrows(), 1):
         vals = list(row)
-        _xl_row(ws, start+ri, vals, alt=ri%2==0, accent=accent)
+        _xl_data_row(ws, start+ri, vals, alt=ri%2==0)
         for ci, val in enumerate(vals, 1):
             cell = ws.cell(row=start+ri, column=ci)
             cn   = hdrs[ci-1].lower()
-            if "mom" in cn or "growth" in cn:
+            if any(kw in cn for kw in ["mom","growth","pct","share"]):
                 try:
                     v = float(val)
-                    cell.font  = Font(size=9, bold=True,
-                                      color="166534" if v>=0 else "991B1B")
+                    cell.font = Font(size=9, bold=True,
+                                     color="166534" if v>=0 else "991B1B")
                     cell.value = f"+{v*100:.2f}%" if v>=0 else f"{v*100:.2f}%"
                 except: pass
-            elif any(w in cn for w in ["sales","revenue","profit","amount","price","total"]):
-                try: cell.number_format = "#,##0.00"; cell.value = float(val)
+            elif any(kw in cn for kw in ["sales","revenue","profit","amount","price","total","fee"]):
+                try: cell.value = float(val); cell.number_format = '#,##0.00'
                 except: pass
+
+def _parse_kpi_numeric(s):
+    s = str(s).strip().replace(",","").replace("$","").replace("%","")
+    s = s.replace("B","e9").replace("M","e6").replace("K","e3").replace("k","e3")
+    try:    return float(s)
+    except: return None
 
 
 def generate_report_excel(df, kpis, ml_results, forecast_data, insights) -> bytes:
     if not HAS_OXL:
         return b""
+
     ct = _col_types(df)
     wb = openpyxl.Workbook()
 
-    # ── README ────────────────────────────────────────────────────────────────
+    # README
     ws = wb.active; ws.title = "README"
-    acc = _SHEET_ACCENTS["README"]
-    _xl_title(ws, "Zero Click AI — Comprehensive Analysis Report", row=1, end_col=6, accent=acc)
+    acc = XL_ACCENTS["README"]
+    _xl_title(ws, "Zero Click AI  ·  Comprehensive Analysis Report", 1, 6, acc)
+    _xl_subtitle(ws, "Report Summary", 2, 6, XL_ACCENTS["KPIs"])
     info = [
-        ("Report Date",  NOW.strftime("%Y-%m-%d %H:%M")),
-        ("Platform",     "Zero Click AI · Genesis Training"),
-        ("Rows",         f"{len(df):,}"),
-        ("Columns",      f"{len(df.columns)}"),
-        ("AI Summary",   (insights[:250] if isinstance(insights,str)
-                          else str(insights)[:250])),
+        ("Report Date",   NOW.strftime("%d %b %Y  %H:%M")),
+        ("Platform",      "Zero Click AI  ·  Genesis Training"),
+        ("Total Rows",    f"{len(df):,}"),
+        ("Total Columns", f"{len(df.columns)}"),
+        ("AI Summary",    (insights[:300] if isinstance(insights,str) else str(insights)[:300])),
     ]
     for ri, (k, v) in enumerate(info, 3):
         ws.cell(row=ri, column=1, value=k).font = Font(bold=True, color=acc, size=10)
-        ws.cell(row=ri, column=2, value=v).font  = Font(size=10)
-        ws.row_dimensions[ri].height = 16
-    ws.column_dimensions["A"].width = 22
-    ws.column_dimensions["B"].width = 65
+        c2 = ws.cell(row=ri, column=2, value=v)
+        c2.font = Font(size=10)
+        c2.alignment = Alignment(wrap_text=True)
+        ws.row_dimensions[ri].height = 18
+    ws.column_dimensions["A"].width = 20
+    ws.column_dimensions["B"].width = 72
 
-    # ── KPIs ──────────────────────────────────────────────────────────────────
+    # KPIs
     ws2 = wb.create_sheet("KPIs")
-    acc2 = _SHEET_ACCENTS["KPIs"]
-    _xl_title(ws2, "Key Performance Indicators", end_col=5, accent=acc2)
-
-    # Build KPI rows and extract numeric values for charting
-    kpi_rows = [[str(k[0]), str(k[1]), str(k[2]) if len(k) > 2 else ""]
+    acc2 = XL_ACCENTS["KPIs"]
+    _xl_title(ws2, "Key Performance Indicators", 1, 5, XL_ACCENTS["README"])
+    _xl_subtitle(ws2, "Core business metrics", 2, 5, acc2)
+    kpi_rows = [[str(k[0]), str(k[1]), str(k[2]) if len(k)>2 else ""]
                 for k in (kpis or [])]
-
-    # Column E holds numeric-only values extracted from Value strings (for chart)
-    def _parse_numeric(s):
-        """Extract a float from strings like '$8.03B', '21.5%', '1,234'. Returns None if unparseable."""
-        import re
-        s = str(s).strip().replace(",", "").replace("$", "").replace("%", "")
-        s = s.replace("B", "e9").replace("M", "e6").replace("K", "e3").replace("k", "e3")
-        try:
-            return float(s)
-        except Exception:
-            return None
-
-    _xl_hdr(ws2, 2, ["Metric", "Value", "Description", "", "Numeric Value"], acc2)
+    _xl_hdr(ws2, 3, ["Metric", "Value", "Description", "", "Numeric Value"], acc2)
     for i, r in enumerate(kpi_rows):
-        _xl_row(ws2, i + 3, r + ["", ""], alt=i % 2 == 0, accent=acc2)
-        # Write numeric value in col E (column 5)
-        num_val = _parse_numeric(r[1]) if len(r) > 1 else None
-        if num_val is not None:
-            cell = ws2.cell(row=i + 3, column=5, value=num_val)
-            cell.font = Font(size=9, color="166534")
+        _xl_data_row(ws2, i+4, r + ["",""], alt=i%2==0)
+        nv = _parse_kpi_numeric(r[1]) if len(r)>1 else None
+        if nv is not None:
+            cell = ws2.cell(row=i+4, column=5, value=nv)
+            cell.font = Font(size=9, bold=True, color="047857")
             cell.alignment = Alignment(horizontal="center")
-            cell.fill = PatternFill("solid", fgColor="F0FDF4")
-
-    ws2.column_dimensions["A"].width = 32
-    ws2.column_dimensions["B"].width = 22
-    ws2.column_dimensions["C"].width = 42
-    ws2.column_dimensions["D"].width = 4
-    ws2.column_dimensions["E"].width = 18
-    ws2.cell(row=2, column=5, value="Numeric Value").font = Font(bold=True, color="FFFFFF", size=10)
-    ws2.cell(row=2, column=5).fill = PatternFill("solid", fgColor=acc2)
-    ws2.cell(row=2, column=5).alignment = Alignment(horizontal="center")
-
-    # Chart: use col E (numeric values) vs col A (metric names) — guaranteed numbers
+            cell.fill = PatternFill("solid", fgColor="ECFDF5")
+            cell.number_format = '#,##0.00'
+    ws2.column_dimensions["A"].width = 30
+    ws2.column_dimensions["B"].width = 20
+    ws2.column_dimensions["C"].width = 40
+    ws2.column_dimensions["E"].width = 20
     n_kpi = len(kpi_rows)
     if n_kpi >= 2:
-        ch = BarChart()
-        ch.type = "bar"          # horizontal bars — easier to read long metric names
-        ch.title = "KPI Numeric Values"
-        ch.style = 10
-        ch.width = 18
-        ch.height = max(9, n_kpi * 1.2)
-        ch.grouping = "clustered"
-        ch.overlap = 100
-        # Data: col E rows 3..(3+n_kpi-1)
-        data = Reference(ws2, min_col=5, min_row=2, max_row=2 + n_kpi)
-        cats = Reference(ws2, min_col=1, min_row=3, max_row=2 + n_kpi)
-        ch.add_data(data, titles_from_data=True)
-        ch.set_categories(cats)
+        ch = BarChart(); ch.type = "bar"; ch.title = "KPI Overview"
+        ch.style = 10; ch.width = 20; ch.height = max(10, n_kpi*1.4)
+        data = Reference(ws2, min_col=5, min_row=3, max_row=3+n_kpi)
+        cats = Reference(ws2, min_col=1, min_row=4, max_row=3+n_kpi)
+        ch.add_data(data, titles_from_data=True); ch.set_categories(cats)
         ch.series[0].graphicalProperties.solidFill = acc2
-        ws2.add_chart(ch, "G2")
+        ws2.add_chart(ch, "G3")
 
-    # ── Sales by Region ───────────────────────────────────────────────────────
+    # Sales by Region
     ws3 = wb.create_sheet("Sales_by_Region")
-    acc3 = _SHEET_ACCENTS["Sales_by_Region"]
-    _xl_title(ws3, f"{_metric_label(df, ct)} by {_group_label(_reg(df, ct), 'Region')}", end_col=4, accent=acc3)
-    rbr = sales_by_region(df, ct)
-    _write_df_xl(ws3, rbr, start=2, accent=acc3)
+    acc3 = XL_ACCENTS["Sales_by_Region"]
+    sc_lbl = _sales_col(df,ct) or "Sales"
+    rg_lbl = _reg_col(df,ct)  or "Region"
+    _xl_title(ws3, f"{sc_lbl} by {rg_lbl}", 1, 4, XL_ACCENTS["README"])
+    _xl_subtitle(ws3, "Regional performance breakdown", 2, 4, acc3)
+    rbr = _sales_by_region(df, ct).sort_values("Sales", ascending=False)
+    _write_df(ws3, rbr, start=3, accent=acc3)
     if len(rbr) >= 2:
-        ch = BarChart(); ch.title = f"{_metric_label(df, ct)} by {_group_label(_reg(df, ct), 'Region')}"; ch.style = 10
-        ch.width = 16; ch.height = 9
-        data = Reference(ws3, min_col=2, min_row=2, max_row=2+len(rbr))
-        cats = Reference(ws3, min_col=1, min_row=3, max_row=2+len(rbr))
+        ch = BarChart(); ch.title = f"{sc_lbl} by Region"; ch.style = 10
+        ch.width = 16; ch.height = 10
+        data = Reference(ws3, min_col=2, min_row=3, max_row=3+len(rbr))
+        cats = Reference(ws3, min_col=1, min_row=4, max_row=3+len(rbr))
         ch.add_data(data, titles_from_data=True); ch.set_categories(cats)
-        ws3.add_chart(ch, "D2")
+        ch.series[0].graphicalProperties.solidFill = acc3
+        ws3.add_chart(ch, "D3")
 
-    # ── Sales by Category ─────────────────────────────────────────────────────
+    # Sales by Category
     ws4 = wb.create_sheet("Sales_by_Category")
-    acc4 = _SHEET_ACCENTS["Sales_by_Category"]
-    _xl_title(ws4, f"{_metric_label(df, ct)} by {_group_label(_cat(df, ct), 'Category')}", end_col=5, accent=acc4)
-    sbc = sales_by_category(df, ct)
-    _write_df_xl(ws4, sbc, start=2, accent=acc4)
+    acc4 = XL_ACCENTS["Sales_by_Category"]
+    ct_lbl = _cat_col(df,ct) or "Category"
+    _xl_title(ws4, f"{sc_lbl} by {ct_lbl}", 1, 5, XL_ACCENTS["README"])
+    _xl_subtitle(ws4, "Category distribution", 2, 5, acc4)
+    sbc = _sales_by_category(df, ct).sort_values("Sales", ascending=False)
+    _write_df(ws4, sbc, start=3, accent=acc4)
     if len(sbc) >= 2:
-        ch = PieChart(); ch.title = "Category Distribution"; ch.style = 10
-        ch.width = 14; ch.height = 9
-        data = Reference(ws4, min_col=2, min_row=2, max_row=2+len(sbc))
-        cats = Reference(ws4, min_col=1, min_row=3, max_row=2+len(sbc))
+        ch = BarChart(); ch.title = f"{sc_lbl} by {ct_lbl}"; ch.style = 10
+        ch.width = 18; ch.height = 12
+        data = Reference(ws4, min_col=2, min_row=3, max_row=3+len(sbc))
+        cats = Reference(ws4, min_col=1, min_row=4, max_row=3+len(sbc))
         ch.add_data(data, titles_from_data=True); ch.set_categories(cats)
-        ws4.add_chart(ch, "E2")
+        ch.series[0].graphicalProperties.solidFill = acc4
+        ws4.add_chart(ch, "E3")
 
-    # ── Top 10 Products ───────────────────────────────────────────────────────
-    ws5 = wb.create_sheet("Top10_Products_Profit")
-    acc5 = _SHEET_ACCENTS["Top10_Products_Profit"]
-    _xl_title(ws5, "Top 10 Records by Key Metric", end_col=6, accent=acc5)
-    tp = top_products(df, ct, n=10)
-    _write_df_xl(ws5, tp, start=2, accent=acc5)
-    # Colour profit column
+    # Top Products
+    ws5 = wb.create_sheet("Top_Products")
+    acc5 = XL_ACCENTS["Top_Products"]
+    _xl_title(ws5, "Top Items by Revenue", 1, 6, XL_ACCENTS["README"])
+    _xl_subtitle(ws5, "Ranked by total sales", 2, 6, acc5)
+    tp = _top_items(df, ct, n=10)
+    _write_df(ws5, tp, start=3, accent=acc5)
     if "Profit" in tp.columns:
         pci = list(tp.columns).index("Profit") + 1
-        for ri in range(3, 3+len(tp)):
+        for ri in range(4, 4+len(tp)):
             cell = ws5.cell(row=ri, column=pci)
             try:
                 v = float(cell.value)
                 cell.fill = PatternFill("solid", fgColor="DCFCE7" if v>0 else "FEE2E2")
                 cell.font = Font(color="166534" if v>0 else "991B1B", size=9, bold=True)
+                cell.number_format = '#,##0.00'; cell.value = v
             except: pass
 
-    # ── Monthly Trend ─────────────────────────────────────────────────────────
+    # Monthly Trend
     ws6 = wb.create_sheet("Monthly_Trend")
-    acc6 = _SHEET_ACCENTS["Monthly_Trend"]
-    _xl_title(ws6, f"Monthly {_metric_label(df, ct)} Trend", end_col=5, accent=acc6)
-    mt = monthly_trend(df, ct)
+    acc6 = XL_ACCENTS["Monthly_Trend"]
+    _xl_title(ws6, f"Monthly {sc_lbl} Trend", 1, 5, XL_ACCENTS["README"])
+    _xl_subtitle(ws6, "Month-over-month performance", 2, 5, acc6)
+    mt = _monthly_trend(df, ct)
     if mt.empty:
-        ws6.cell(row=3, column=1, value="No datetime column found.")
+        ws6.cell(row=4, column=1, value="No datetime column detected.")
     else:
-        _write_df_xl(ws6, mt, start=2, accent=acc6)
-        ch = LineChart(); ch.title = f"Monthly {_metric_label(df, ct)} Trend"; ch.style = 10
-        ch.width = 16; ch.height = 9
-        data = Reference(ws6, min_col=2, min_row=2, max_row=2+len(mt))
+        _write_df(ws6, mt, start=3, accent=acc6)
+        ch = LineChart(); ch.title = f"Monthly {sc_lbl}"; ch.style = 10
+        ch.width = 20; ch.height = 10
+        data = Reference(ws6, min_col=2, min_row=3, max_row=3+len(mt))
         ch.add_data(data, titles_from_data=True)
-        ws6.add_chart(ch, "E2")
+        ch.series[0].graphicalProperties.solidFill = acc6
+        ws6.add_chart(ch, "E3")
 
-    # ── Raw Data ──────────────────────────────────────────────────────────────
+    # Raw Data
     ws7 = wb.create_sheet("Raw_Data")
-    acc7 = _SHEET_ACCENTS["Raw_Data"]
-    end  = min(len(df.columns), 12)
-    _xl_title(ws7, "Raw Cleaned Dataset", end_col=end, accent=acc7)
-    _write_df_xl(ws7, df.head(500), start=2, accent=acc7)
+    acc7 = XL_ACCENTS["Raw_Data"]
+    end  = min(len(df.columns), 14)
+    _xl_title(ws7, f"Raw Cleaned Dataset  ·  First 500 rows", 1, end, XL_ACCENTS["README"])
+    _xl_subtitle(ws7, f"{len(df):,} total rows  ·  {len(df.columns)} columns", 2, end, acc7)
+    _write_df(ws7, df.head(500), start=3, accent=acc7)
 
     for sheet in [ws2, ws3, ws4, ws5, ws6, ws7]:
-        sheet.freeze_panes = "A3"
+        sheet.freeze_panes = "A4"
+    for sheet in [ws3, ws4, ws5, ws6, ws7]:
+        sheet.auto_filter.ref = sheet.dimensions
 
     out = io.BytesIO()
     wb.save(out)
